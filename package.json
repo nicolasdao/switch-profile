@@ -1,6 +1,6 @@
 {
   "name": "switch-cloud",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "NPX script that exposes terminal shortcut to easily switch between cloud configuration (aws, gcp).",
   "repository": {
     "type": "git",
