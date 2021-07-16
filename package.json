@@ -1,6 +1,6 @@
 {
   "name": "switch-cloud",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "main": "index.js",
   "bin": "index.js",
   "description": "NPX script that exposes terminal shortcut to easily switch between cloud configuration (aws, gcp).",
