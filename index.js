@@ -155,7 +155,7 @@ const switchCmd = async () => {
 				pageSize:20,
 				choices: [
 					...(defaultProfileExpired ? [{ name: `Refresh default profile ${defaultProfileName.bold}` ,value:'refresh' }] : []),
-					{ name: 'Create a new profile', value:'new' }, 
+					{ name: 'Create profile', value:'new' }, 
 					{ name: 'Delete profiles', value:'delete' },
 					{ name: 'Abort', value:ABORT_KEY }
 				]
@@ -222,14 +222,27 @@ const switchCmd = async () => {
 				const [profileErrors] = await createProfile({ name, aws_access_key_id, aws_secret_access_key, region })
 				if (profileErrors)
 					return printAWSerrors([new Error('Fail to create profile'), ...profileErrors])
-				else
-					console.log(`New profile ${name.bold} successfully created 🚀`.green)
-			} else {
+			} else
 				await createSsoProfile(name)
-				console.log(`New profile ${name.bold} successfully created 🚀`.green)
-			}
 
-			// createProfile
+			console.log(`New profile ${name.bold} successfully created 🚀`.green)
+
+			const { setAsDefault } = await inquirer.prompt([
+				{ 
+					type: 'confirm', 
+					name: 'setAsDefault', 
+					message: 'Do you wish to set this new profile as the default?',
+				}
+			])
+
+			if (!setAsDefault)
+				return  
+
+			const [listErrors2, profiles2] = await listProfiles()
+			if (listErrors2)
+				return printAWSerrors([new Error('Fail to list profiles'), ...listErrors2])
+
+			await setProfileToDefault(name, profiles2)
 		} else if (option == ABORT_KEY)
 			return
 
