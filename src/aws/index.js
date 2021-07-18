@@ -36,23 +36,32 @@ const getCredsFile = () => catchErrors((async () => {
 	if (!credsExist)
 		throw wrapErrors(errMsg, [new Error(`AWS credentials file ${AWS_CREDS_FILE} not found.`)])
 	const credsStr = (await fileHelper.read(AWS_CREDS_FILE) || '').toString()
-	if (!credsStr)
-		throw wrapErrors(errMsg, [new Error(`Credentials not found. ${AWS_CREDS_FILE} does not contain any credentials.`)])
+
+	return credsStr
+})())
+
+const getConfigFile = () => catchErrors((async () => {
+	const errMsg = `Fail to get the content from the ${AWS_CONFIG_FILE} file.`
+	const credsExist = await fileHelper.exists(AWS_CONFIG_FILE)
+	if (!credsExist)
+		throw wrapErrors(errMsg, [new Error(`AWS config file ${AWS_CONFIG_FILE} not found.`)])
+	const credsStr = (await fileHelper.read(AWS_CONFIG_FILE) || '').toString()
+
 	return credsStr
 })())
 
 const listProfiles = () => catchErrors((async () => {
 	await awsCliV2Exists()
-	const profilesExist = await fileHelper.exists(AWS_CONFIG_FILE)
-	if (!profilesExist)
-		throw new Error(`AWS config file ${AWS_CONFIG_FILE} not found.`)
-	const profilesStr = (await fileHelper.read(AWS_CONFIG_FILE) || '').toString()
-	if (!profilesStr)
+	const [configStrErrors, configStr] = await getConfigFile()
+	if (configStrErrors)
+		throw wrapErrors('Fail to list AWS profiles', configStrErrors)
+
+	if (!configStr)
 		return []
 
-	const profiles = profilesStr.match(/\[(.*?)\]/g)
+	const profiles = configStr.match(/\[(.*?)\]/g)
 	return profiles.map(profile => {
-		const [,rest=''] = profilesStr.split(profile)
+		const [,rest=''] = configStr.split(profile)
 		const [config=''] = rest.split('[')
 		const params = config.split(EOL)
 		const p = {
@@ -207,7 +216,7 @@ const getSsoCredentials = profile => catchErrors((async () => {
  * @return {Date}   session.expiry_date				e.g., 2021-07-17T11:33:12Z
  */
 const refreshSsoSession = (profile, ssoUrl) => catchErrors((async () => {
-	const errMsg = `Fail to refresh the SSO session for profile ${profile}`
+	const errMsg = `Fail to refresh the SSO session for AWS profile ${profile}`
 	let [ssoSessionErrors, ssoSession] = await getSsoSession(ssoUrl)
 	if (ssoSessionErrors)
 		throw wrapErrors(errMsg, ssoSessionErrors)
@@ -235,7 +244,11 @@ const refreshSsoSession = (profile, ssoUrl) => catchErrors((async () => {
 })())
 
 /**
- * [description]
+ * Gets the AWS credentials for a specific profile. If that profile is an SSO profile, this function has a series of
+ * side-effects:
+ * 	- If the local SSO session stored under ~/.aws/sso/cache has expired, then it will redirect the user to the SSO portal and eventually refresh that ~/.aws/sso/cache.
+ *  - If the local SSO creds stored under ~/.aws/cli/cache have expired (AWS_KEY, AWS_SECRET, AWS_SESSION), then they will be refreshed using the session stored under the ~/.aws/sso/cache.
+ * 
  * @param  {String} profile		e.g., 'sso-dev-cloudless'
  * @param  {String} ssoUrl 		e.g., 'https://cloudless.awsapps.com/start'
  * 
@@ -274,12 +287,9 @@ const getCredentials = (profile, ssoUrl) => catchErrors((async () => {
 	}
 })())
 
-// [default]
-// aws_access_key_id = AKIAVWDPUQW56CHCG7R4
-// aws_secret_access_key = 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
 
 const updateDefaultProfile = ({ profile, expiry_date, aws_access_key_id, aws_secret_access_key, aws_session_token }) => catchErrors((async () => {
-	const errMsg = `Fail to update the ${AWS_CREDS_FILE}`
+	const errMsg = `Fail to update the ${AWS_CREDS_FILE} file`
 	const [errors, credsStr] = await getCredsFile()
 	if (errors)
 		throw wrapErrors(errMsg, errors)
@@ -302,7 +312,7 @@ const updateDefaultProfile = ({ profile, expiry_date, aws_access_key_id, aws_sec
 })())
 
 const getDefaultProfile = () => catchErrors((async () => {
-	const errMsg = `Fail to get the default profile in the ${AWS_CREDS_FILE} file.`
+	const errMsg = `Fail to get the default AWS profile in the ${AWS_CREDS_FILE} file.`
 	const [errors, credsStr] = await getCredsFile()
 	if (errors)
 		throw wrapErrors(errMsg, errors)
@@ -319,10 +329,116 @@ const getDefaultProfile = () => catchErrors((async () => {
 	return creds
 })())
 
+const deleteProfileFromConfig = (profile, fileContent) => {
+	fileContent = fileContent || ''
+	const regExp = new RegExp(`\\[(profile\\s){0,1}${profile}\\]((.|\\n|\\r)*?)(\\[|$)`)
+	const profileMatch = (fileContent.match(regExp)||[])[0] || ''
+	
+	if (!profileMatch)
+		return fileContent
+
+	const lastChar = profileMatch.slice(-1)
+	return fileContent.replace(profileMatch, lastChar)
+}
+
+const deleteProfileFromCreds = (profile, fileContent) => {
+	fileContent = fileContent || ''
+	const regExp = new RegExp(`\\[${profile}\\]((.|\\n|\\r)*?)(\\[|$)`)
+	const profileMatch = (fileContent.match(regExp)||[])[0] || ''
+	
+	if (!profileMatch)
+		return fileContent
+
+	const lastChar = profileMatch.slice(-1)
+	return fileContent.replace(profileMatch, lastChar)
+}
+
+const deleteProfiles = profiles => catchErrors((async () => {
+	if (!profiles || !profiles.length)
+		return 
+
+	const errMsg = 'Fail to delete AWS profiles'
+
+	if (profiles.some(p => p == 'default'))
+		throw wrapErrors(errMsg, [new Error(`The 'default' profile cannot be deleted.`)])
+
+	let [configStrErrors, configStr] = await getConfigFile()
+	let [credsStrErrors, credsStr] = await getCredsFile()
+
+	if (configStrErrors || credsStrErrors)
+		throw wrapErrors(errMsg, configStrErrors || credsStrErrors)
+
+	for (let i=0;i<profiles.length;i++) {
+		const profile = profiles[i]
+		configStr = deleteProfileFromConfig(profile, configStr)
+		credsStr = deleteProfileFromCreds(profile, credsStr)
+	}
+
+	await fileHelper.write(AWS_CONFIG_FILE, configStr)
+	await fileHelper.write(AWS_CREDS_FILE, credsStr)
+})())
+
+
+
+const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region, sso_start_url, sso_account_id, sso_role_name }) => catchErrors((async () => {
+	await awsCliV2Exists()
+
+	const errMsg = `Fail to create AWS profile`
+	if (!name)
+		throw wrapErrors(errMsg, [new Error(`Missing required argument 'name'.`)])
+	if (!region)
+		throw wrapErrors(errMsg, [new Error(`Missing required argument 'region'.`)])
+	if (sso_start_url) {
+		if (!sso_account_id)
+			throw wrapErrors(errMsg, [new Error(`Missing required argument 'sso_account_id'. With AWS SSO profile this argument is required.`)])
+		if (!sso_role_name)
+			throw wrapErrors(errMsg, [new Error(`Missing required argument 'sso_role_name'. With AWS SSO profile this argument is required.`)])
+		if (!sso_region)
+			throw wrapErrors(errMsg, [new Error(`Missing required argument 'sso_region'. With AWS SSO profile this argument is required.`)])
+	} else {
+		if (!aws_access_key_id)
+			throw wrapErrors(errMsg, [new Error(`Missing required argument 'aws_access_key_id'.`)])
+		if (!aws_secret_access_key)
+			throw wrapErrors(errMsg, [new Error(`Missing required argument 'aws_secret_access_key'.`)])
+	}
+
+	let [configStrErrors, configStr] = await getConfigFile()
+	if (configStrErrors)
+		throw wrapErrors(errMsg, configStrErrors)
+
+	const configProfiles = [`[profile ${name}]`+EOL]
+	const credsProfiles = [`[${name}]`+EOL]
+	if (sso_start_url) {
+		configProfiles.push(`sso_start_url = ${sso_start_url}`+EOL)
+		configProfiles.push(`sso_region = ${sso_region}`+EOL)
+		configProfiles.push(`sso_account_id = ${sso_account_id}`+EOL)
+		configProfiles.push(`sso_role_name = ${sso_role_name}`+EOL)
+	} else {
+		let [credsStrErrors, credsStr] = await getCredsFile()
+		if (credsStrErrors)
+			throw wrapErrors(errMsg, credsStrErrors)
+
+		credsProfiles.push(`aws_access_key_id = ${aws_access_key_id}`+EOL)
+		credsProfiles.push(`aws_secret_access_key = ${aws_secret_access_key}`+EOL+EOL)
+	}
+
+	configProfiles.push(`region = ${region}`+EOL)
+	configProfiles.push(`output = json`+EOL+EOL)
+
+	configStr += configProfiles.join('')
+	configStr += configProfiles.join('')
+
+
+	// await fileHelper.write(AWS_CONFIG_FILE, configStr)
+	// if (!sso_start_url)
+	// 	await fileHelper.write(AWS_CREDS_FILE, credsStr)
+})())
+
 module.exports = {
 	listProfiles,
 	getCredentials,
 	getDefaultProfile,
-	updateDefaultProfile
+	updateDefaultProfile,
+	deleteProfiles
 }
 
