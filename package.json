@@ -1,17 +1,17 @@
 {
-  "name": "switch-cloud",
-  "version": "0.0.4",
+  "name": "switch-profile",
+  "version": "0.0.1",
   "main": "index.js",
   "bin": "index.js",
   "description": "NPX script that exposes terminal shortcut to easily switch between cloud configuration (aws, gcp).",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nicolasdao/switch-cloud.git"
+    "url": "https://github.com/nicolasdao/switch-profile.git"
   },
   "bugs": {
-    "url": "https://github.com/nicolasdao/switch-cloud/issues"
+    "url": "https://github.com/nicolasdao/switch-profile/issues"
   },
-  "homepage": "https://github.com/nicolasdao/switch-cloud#readme",
+  "homepage": "https://github.com/nicolasdao/switch-profile#readme",
   "scripts": {
     "dev": "TZ=UTC NODE_ENV=dev node index.js",
     "lint": "eslint index.js src/ test/ --fix",
@@ -29,5 +29,17 @@
     "mocha": "^8.2.1",
     "standard-version": "^9.3.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "archiver": "^5.3.0",
+    "colors": "^1.4.0",
+    "commander": "^8.0.0",
+    "convert-stream": "^1.0.2",
+    "core-async": "^2.0.4",
+    "fast-glob": "^3.2.7",
+    "inquirer": "^8.1.2",
+    "mime-types": "^2.1.31",
+    "puffy": "^1.6.0",
+    "rimraf": "^3.0.2",
+    "tar-stream": "^2.2.0"
+  }
 }
