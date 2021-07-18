@@ -2,7 +2,9 @@ const { error: { catchErrors, wrapErrors }, promise: { delay } } = require('puff
 const { homedir, EOL } = require('os')
 const { join } = require('path')
 const { exec, isCommandExist } = require('../core')
+const { spawn } = require('child_process')
 const fileHelper = require('../fileHelper')
+const regions = require('./regions')
 
 const SSO_GET_CREDS_TIMEOUT = 5*60*1000 // 5 minutes to complete the SSO login
 const AWS_CONFIG_FILE = join(homedir(), '.aws/config')
@@ -360,7 +362,7 @@ const deleteProfiles = profiles => catchErrors((async () => {
 	const errMsg = 'Fail to delete AWS profiles'
 
 	if (profiles.some(p => p == 'default'))
-		throw wrapErrors(errMsg, [new Error(`The 'default' profile cannot be deleted.`)])
+		throw wrapErrors(errMsg, [new Error('The \'default\' profile cannot be deleted.')])
 
 	let [configStrErrors, configStr] = await getConfigFile()
 	let [credsStrErrors, credsStr] = await getCredsFile()
@@ -378,60 +380,43 @@ const deleteProfiles = profiles => catchErrors((async () => {
 	await fileHelper.write(AWS_CREDS_FILE, credsStr)
 })())
 
-
-
-const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region, sso_start_url, sso_account_id, sso_role_name }) => catchErrors((async () => {
+const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region }) => catchErrors((async () => {
 	await awsCliV2Exists()
 
-	const errMsg = `Fail to create AWS profile`
+	const errMsg = 'Fail to create AWS profile'
 	if (!name)
-		throw wrapErrors(errMsg, [new Error(`Missing required argument 'name'.`)])
+		throw wrapErrors(errMsg, [new Error('Missing required argument \'name\'.')])
 	if (!region)
-		throw wrapErrors(errMsg, [new Error(`Missing required argument 'region'.`)])
-	if (sso_start_url) {
-		if (!sso_account_id)
-			throw wrapErrors(errMsg, [new Error(`Missing required argument 'sso_account_id'. With AWS SSO profile this argument is required.`)])
-		if (!sso_role_name)
-			throw wrapErrors(errMsg, [new Error(`Missing required argument 'sso_role_name'. With AWS SSO profile this argument is required.`)])
-		if (!sso_region)
-			throw wrapErrors(errMsg, [new Error(`Missing required argument 'sso_region'. With AWS SSO profile this argument is required.`)])
-	} else {
-		if (!aws_access_key_id)
-			throw wrapErrors(errMsg, [new Error(`Missing required argument 'aws_access_key_id'.`)])
-		if (!aws_secret_access_key)
-			throw wrapErrors(errMsg, [new Error(`Missing required argument 'aws_secret_access_key'.`)])
-	}
+		throw wrapErrors(errMsg, [new Error('Missing required argument \'region\'.')])
+	if (!aws_access_key_id)
+		throw wrapErrors(errMsg, [new Error('Missing required argument \'aws_access_key_id\'.')])
+	if (!aws_secret_access_key)
+		throw wrapErrors(errMsg, [new Error('Missing required argument \'aws_secret_access_key\'.')])
 
 	let [configStrErrors, configStr] = await getConfigFile()
-	if (configStrErrors)
-		throw wrapErrors(errMsg, configStrErrors)
+	let [credsStrErrors, credsStr] = await getCredsFile()
+	if (configStrErrors||credsStrErrors)
+		throw wrapErrors(errMsg, configStrErrors||credsStrErrors)
 
 	const configProfiles = [`[profile ${name}]`+EOL]
 	const credsProfiles = [`[${name}]`+EOL]
-	if (sso_start_url) {
-		configProfiles.push(`sso_start_url = ${sso_start_url}`+EOL)
-		configProfiles.push(`sso_region = ${sso_region}`+EOL)
-		configProfiles.push(`sso_account_id = ${sso_account_id}`+EOL)
-		configProfiles.push(`sso_role_name = ${sso_role_name}`+EOL)
-	} else {
-		let [credsStrErrors, credsStr] = await getCredsFile()
-		if (credsStrErrors)
-			throw wrapErrors(errMsg, credsStrErrors)
 
-		credsProfiles.push(`aws_access_key_id = ${aws_access_key_id}`+EOL)
-		credsProfiles.push(`aws_secret_access_key = ${aws_secret_access_key}`+EOL+EOL)
-	}
+	credsProfiles.push(`aws_access_key_id = ${aws_access_key_id}`+EOL)
+	credsProfiles.push(`aws_secret_access_key = ${aws_secret_access_key}`+EOL+EOL)
 
 	configProfiles.push(`region = ${region}`+EOL)
-	configProfiles.push(`output = json`+EOL+EOL)
+	configProfiles.push('output = json'+EOL+EOL)
 
-	configStr += configProfiles.join('')
-	configStr += configProfiles.join('')
+	const newCreds = credsProfiles.join('')
+	const newConfig = configProfiles.join('')
 
+	await fileHelper.write(AWS_CONFIG_FILE, configStr+EOL+newConfig)
+	await fileHelper.write(AWS_CREDS_FILE, credsStr+EOL+newCreds)
+})())
 
-	// await fileHelper.write(AWS_CONFIG_FILE, configStr)
-	// if (!sso_start_url)
-	// 	await fileHelper.write(AWS_CREDS_FILE, credsStr)
+const createSsoProfile = name => catchErrors((async () => {
+	await awsCliV2Exists()
+	spawn('aws', ['configure', 'sso', '--profile', name],{ stdio: 'inherit' })
 })())
 
 module.exports = {
@@ -439,6 +424,9 @@ module.exports = {
 	getCredentials,
 	getDefaultProfile,
 	updateDefaultProfile,
-	deleteProfiles
+	deleteProfiles,
+	createProfile,
+	createSsoProfile,
+	regions
 }
 

@@ -37,6 +37,7 @@
     "core-async": "^2.0.4",
     "fast-glob": "^3.2.7",
     "inquirer": "^8.1.2",
+    "inquirer-autocomplete-prompt": "^1.4.0",
     "mime-types": "^2.1.31",
     "puffy": "^1.6.0",
     "rimraf": "^3.0.2",

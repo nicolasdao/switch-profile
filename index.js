@@ -6,7 +6,7 @@
 const program = require('commander')
 const inquirer = require('inquirer')
 const { EOL } = require('os')
-const { listProfiles, getCredentials, getDefaultProfile, updateDefaultProfile, deleteProfiles } = require('./src/aws')
+const { listProfiles, getCredentials, getDefaultProfile, updateDefaultProfile, deleteProfiles, createProfile, regions, createSsoProfile } = require('./src/aws')
 const { printAWSerrors } = require('./src/core')
 require('colors')
 const { version } = require('./package.json')
@@ -14,6 +14,82 @@ program.version(version) // This is required is you wish to support the --versio
 
 const OPTIONS_KEY = '_options_4s2s3a'
 const ABORT_KEY = '_abort_rfewq1'
+
+inquirer.registerPrompt('autocomplete', require('inquirer-autocomplete-prompt'))
+
+const chooseProfileName = async (denyList) => {
+	let { name } = await inquirer.prompt([
+		{ 
+			type: 'input', 
+			name: 'name', 
+			message: 'Enter a profile name (alphanumerical lowercase and \'-\' characters only)'
+		}
+	])
+
+	if (!name) {
+		console.log('Profile name is required. Please try again.'.red)
+		name = await chooseProfileName()
+	} 
+
+	if (/[^a-z0-9_-]/.test(name)) {
+		console.log('Profile name contained invalid characters. Only alphanumerical lowercase and \'-\' characters are allowed. Please try again.'.red)
+		name = await chooseProfileName()
+	}
+
+	if (name.length < 2) {
+		console.log('Profile name is not long enough. The profile name must be longer or equal to 2 characters. Please try again.'.red)
+		name = await chooseProfileName()
+	}	
+
+	if (denyList && denyList.some(n => n == name)) {
+		console.log(`Profile name ${name.bold} already exist. Please try again.`.red)
+		name = await chooseProfileName()
+	}
+
+	return name
+}
+
+const chooseNonEmpty = async (prop, message) => {
+	let { value } = await inquirer.prompt([
+		{ 
+			type: 'input', 
+			name: 'value', 
+			message
+		}
+	])
+
+	if (!value) {
+		console.log(`${prop} cannot be empty. Please try again.`.red)
+		value = await chooseNonEmpty(prop, message)
+	} 
+
+	return value
+}
+
+const chooseRegions = async () => {
+	const { region } = await inquirer.prompt([
+		{ 
+			type: 'autocomplete', 
+			name: 'region', 
+			message: 'Select a region:',
+			pageSize: 20,
+			source: function(answersSoFar, input) {
+				if (input) 
+					return regions.filter(r => `${r.code} - ${r.name}`.toLowerCase().indexOf(input.toLowerCase()) >= 0).map(r => ({
+						name: `${r.code} - ${r.name}`,
+						value:r.code
+					}))
+				else
+					return regions.map(r => ({
+						name: `${r.code} - ${r.name}`,
+						value:r.code
+					}))
+			}
+		}
+	])
+
+	return region
+}
 
 const switchCmd = async () => {
 	const [defaultProfileErrors, defaultProfile] = await getDefaultProfile()
@@ -93,7 +169,7 @@ const switchCmd = async () => {
 				{ 
 					type: 'checkbox', 
 					name: 'delProfiles', 
-					message: `Select the profiles you which to delete: `,
+					message: 'Select the profiles you which to delete: ',
 					pageSize: 20,
 					choices: profiles.map((p,i) => {
 						return { 
@@ -128,84 +204,36 @@ const switchCmd = async () => {
 				return printAWSerrors([new Error(`Fail to delete ${label}`), ...delErrors])
 
 			console.log(`AWS profile${delProfiles.length > 1 ? 's' : ''} successfully deleted.`.green)
+		} else if (option == 'new') {
+			const name = await chooseProfileName(profiles.map(p => p.name))
+			const { type } = await inquirer.prompt([
+				{ 
+					type: 'list', 
+					name: 'type', 
+					message: 'Choose an AWS profile type: ',
+					choices: ['standard','sso']
+				}
+			])
+
+			if (type == 'standard') {
+				const aws_access_key_id = await chooseNonEmpty('aws_access_key_id', 'Enter the profile\'s access key:')
+				const aws_secret_access_key = await chooseNonEmpty('aws_secret_access_key', 'Enter the profile\'s access secret key:')
+				const region = await chooseRegions()
+				const [profileErrors] = await createProfile({ name, aws_access_key_id, aws_secret_access_key, region })
+				if (profileErrors)
+					return printAWSerrors([new Error('Fail to create profile'), ...profileErrors])
+				else
+					console.log(`New profile ${name.bold} successfully created 🚀`.green)
+			} else
+				await createSsoProfile(name)
+
+			// createProfile
 		} else if (option == ABORT_KEY)
 			return
 
 		return 
-	} else if (option == 'new') {
-		
 	} else
 		await setProfileToDefault(friendlyName, profiles)
-
-	// ])
-	// keyPairConfig.cipher = cipher
-	// const isRSA = cipher == 'rsa'
-
-	// if (isRSA) {
-	//	 const choices = getRsakeyLength()
-	//	 const { length } = await inquirer.prompt([
-	//		 { type: 'list', name: 'length', message: 'Choose a key length', choices , default:getDefaultChoice(choices, DEFAULT_RSA_KEY_LENGTH) }
-	//	 ])
-	//	 keyPairConfig.length = length
-	// } else if (cipher == 'ec') {
-	//	 const choices = getEcCurves()
-	//	 const { curve } = await inquirer.prompt([
-	//		 { type: 'list', name: 'curve', message: 'Choose an ECDSA curve', choices, default:getDefaultChoice(choices, DEFAULT_EC_CURCE) }
-	//	 ])
-	//	 keyPairConfig.curve = curve
-	// }
-
-	// const { protect } = await inquirer.prompt([
-	//	 { type: 'confirm', name: 'protect', message: 'Do you want to protect the private key with a passphrase?', default: false }
-	// ]) 
-
-	// if (protect) {
-	//	 const { passphrase } = await inquirer.prompt([{ type:'password', name:'passphrase', mask:'*', message:'Enter a passphrase' }])
-	//	 keyPairConfig.passphrase = passphrase
-	// }		
-
-	// const { formats } = await requiredPrompt(() => inquirer.prompt([
-	//	 { type: 'checkbox', name: 'formats', message: 'Choose the output formats', choices:[
-	//		 { name:'pem', value:'pem', checked:true }, 
-	//		 { name:'jwk', value:'jwk', checked:false }] 
-	//	 }
-	// ]), 'formats')
-	// keyPairConfig.formats = formats
-
-	// const pemSelected = formats.some(f => f == 'pem')
-	// const jwkSelected = formats.some(f => f == 'jwk')
-
-	// const { printOrSaveOptions=[] } = await requiredPrompt(() => inquirer.prompt([
-	//	 { type: 'checkbox', name: 'printOrSaveOptions', message: 'Choose the output options', choices:[
-	//		 { name:'Print in this terminal', value:'print', checked:true },
-	//		 { name:'Save to files', value:'save' },
-	//		 { name:'Both', value:'both' },
-	//	 ] 
-	//	 }
-	// ]), 'printOrSaveOptions')
-
-	// const printKeys = printOrSaveOptions.some(o => o == 'both' || o == 'print')
-	// const saveKeys = printOrSaveOptions.some(o => o == 'both' || o == 'save')
-	// const options = { print:printKeys, save:saveKeys }
-
-	// const keypair = new Keypair(keyPairConfig)
-
-	// const showcaseKey = showcaseKeypair(keypair)
-	// const showcasePrivateKey = showcaseKey('private')
-	// const showcasePublicKey = showcaseKey('public')
-
-	// if (printKeys) console.log('PRIVATE KEY'.green.underline.bold)
-	// if (pemSelected) 
-	//	 await showcasePrivateKey('PEM', { ...options, file:'private.key' })
-	// if (jwkSelected) 
-	//	 await showcasePrivateKey('JWK', { ...options, file:'private.json' })
-
-	// if (printKeys) console.log('PUBLIC KEY'.green.underline.bold)
-	// if (pemSelected) 
-	//	 await showcasePublicKey('PEM', { ...options, file:'public.pem' })
-	// if (jwkSelected) 
-	//	 await showcasePublicKey('JWK', { ...options, file:'public.json' })
-
 }
 
 const setProfileToDefault = async (profileName, profileList, successMsg) => {
@@ -228,7 +256,7 @@ const setProfileToDefault = async (profileName, profileList, successMsg) => {
 	})
 
 	if (errors)
-		return printAWSerrors([new Error(`Fail to update the default profile`), ...errors])
+		return printAWSerrors([new Error('Fail to update the default profile'), ...errors])
 
 	console.log((successMsg || `AWS profile ${profile.name.bold} successfully set up as default.`).green)
 }
@@ -239,114 +267,6 @@ program
 	.command('switch')
 	.description('Default behavior. List the existing configuration and help select one. Equivalent to `npx switch-cloud`') // Optional description
 	.action(switchCmd)
-
-// program
-// 	.command('convert <filepath>')
-// 	.alias('cv') // Optional alias
-// 	.description('Converts a key file from PEM to JWK(i.e., JSON) or from JWK to PEM. Also support OpenID URL. Example: `npx create-keys cv private.json` or `npx create-keys cv https://accounts.google.com/.well-known/openid-configuration`')
-// 	.action(async (filepath) => {
-// 		// const isUrl = validate.url(filepath)
-
-// 		// if (isUrl) {
-// 		//	 const [errors, result={}] = await listOpenIDpublicKeys(filepath)
-// 		//	 if (errors) {
-// 		//		 printErrors(errors)
-// 		//		 process.exit()
-// 		//	 }
-
-// 		//	 const { jwks_uri, data } = result
-
-// 		//	 const isNotArray = !Array.isArray(data.keys)
-// 		//	 if (!data.keys ||  isNotArray) {
-// 		//		 const msg = isNotArray 
-// 		//			 ? `'keys' is expected to be an array of JWK. Found ${typeof(data.keys)} instead`
-// 		//			 : 'Could not found the \'keys\' property in the response'
-// 		//		 console.log(`WARN: ${msg}. Failed to convert JWK keys to PEM format`.yellow)
-// 		//		 console.log(`KEYS at ${jwks_uri}:`.green)
-// 		//		 console.log(JSON.stringify(data.keys, null, '  '))
-// 		//	 } else if (!data.keys.length) {
-// 		//		 console.log(`No public keys found at ${jwks_uri}`.cyan)
-// 		//	 } else {
-// 		//		 console.log(`Found ${data.keys.length} JWK public key${data.keys.length > 1 ? 's' : ''} at ${jwks_uri}`.cyan)
-// 		//		 const { printOrSaveOptions=[] } = await requiredPrompt(() => inquirer.prompt([
-// 		//			 { type: 'checkbox', name: 'printOrSaveOptions', message: 'Choose the output options', choices:[
-// 		//				 { name:'Print in this terminal', value:'print', checked:true },
-// 		//				 { name:'Save to files', value:'save' },
-// 		//				 { name:'Both', value:'both' },
-// 		//			 ] 
-// 		//			 }
-// 		//		 ]), 'printOrSaveOptions')
-
-// 		//		 const printKeys = printOrSaveOptions.some(o => o == 'both' || o == 'print')
-// 		//		 const saveKeys = printOrSaveOptions.some(o => o == 'both' || o == 'save')
-// 		//		 const options = { print:printKeys, save:saveKeys }
-
-// 		//		 for (let jwk of data.keys) {
-// 		//			 const showcaseKey = showcaseKeypair(new Key({ jwk }))()
-// 		//			 const kid = jwk.kid||'no_kid'
-// 		//			 const alg = jwk.alg||'no_alg'
-// 		//			 const kty = jwk.kty||'no_kty'
-// 		//			 const filename = `${kty}-${alg}-kid_${kid}.pem`.toLowerCase()
-// 		//			 await showcaseKey('PEM', { ...options, header: filename , file:filename })
-// 		//		 }
-// 		//	 }
-// 		// } else {
-// 		//	 const file = getAbsolutePath(filepath)
-// 		//	 const fileExists = await exists(file)
-// 		//	 if (!fileExists) {
-// 		//		 console.log(`File ${file} not found`.red)
-// 		//		 process.exit()
-// 		//	 }			
-
-// 		//	 const fileContent = (await read(file)).toString()
-
-// 		//	 let jwkContent 
-// 		//	 try {
-// 		//		 jwkContent = JSON.parse(fileContent)
-// 		//	 } catch(err) {
-// 		//		 jwkContent = null
-// 		//		 voidFn(err)
-// 		//	 }
-
-// 		//	 const keyConfig = jwkContent ? { jwk:jwkContent } : { pem:fileContent }
-// 		//	 const [outputFormat, outputFile] = jwkContent ? ['PEM', 'key.pem'] : ['JWK', 'key.json']
-
-// 		//	 const { printOrSaveOptions=[] } = await requiredPrompt(() => inquirer.prompt([
-// 		//		 { type: 'checkbox', name: 'printOrSaveOptions', message: 'Choose the output options', choices:[
-// 		//			 { name:'Print in this terminal', value:'print', checked:true },
-// 		//			 { name:'Save to files', value:'save' },
-// 		//			 { name:'Both', value:'both' },
-// 		//		 ] 
-// 		//		 }
-// 		//	 ]), 'printOrSaveOptions')
-			
-// 		//	 const printKeys = printOrSaveOptions.some(o => o == 'both' || o == 'print')
-// 		//	 const saveKeys = printOrSaveOptions.some(o => o == 'both' || o == 'save')
-// 		//	 const options = { print:printKeys, save:saveKeys }
-
-// 		//	 const showcaseKey = showcaseKeypair(new Key(keyConfig))()
-
-// 		//	 await showcaseKey(outputFormat, { ...options, file:outputFile })
-// 		// }
-// 	})
-
-// program
-// 	.command('list <url>')
-// 	.alias('ls') // Optional alias
-// 	.description('List the public keys of an OpenID discovery endpoint. Example: `npx create-keys ls https://accounts.google.com/.well-known/openid-configuration`')
-// 	.action(async (url) => {
-// 		// const [errors, result={}] = await listOpenIDpublicKeys(url)
-// 		// if (errors) {
-// 		//	 printErrors(errors)
-// 		//	 process.exit()
-// 		// }
-
-// 		// const { jwks_uri, data } = result
-
-// 		// console.log(`KEYS at ${jwks_uri}:`.green)
-// 		// console.log(JSON.stringify(data, null, '  '))
-// 	})
-
 
 // 2. Deals with cases where no command is passed.
 if (process.argv.length == 2)
