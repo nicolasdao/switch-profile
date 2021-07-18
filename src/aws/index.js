@@ -416,7 +416,10 @@ const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region 
 
 const createSsoProfile = name => catchErrors((async () => {
 	await awsCliV2Exists()
-	spawn('aws', ['configure', 'sso', '--profile', name],{ stdio: 'inherit' })
+	await new Promise(next => {
+		const child = spawn('aws', ['configure', 'sso', '--profile', name],{ stdio: 'inherit' })
+		child.on('exit', next)
+	})
 })())
 
 module.exports = {

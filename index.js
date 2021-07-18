@@ -224,8 +224,10 @@ const switchCmd = async () => {
 					return printAWSerrors([new Error('Fail to create profile'), ...profileErrors])
 				else
 					console.log(`New profile ${name.bold} successfully created 🚀`.green)
-			} else
+			} else {
 				await createSsoProfile(name)
+				console.log(`New profile ${name.bold} successfully created 🚀`.green)
+			}
 
 			// createProfile
 		} else if (option == ABORT_KEY)
