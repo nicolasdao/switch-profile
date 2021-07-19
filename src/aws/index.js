@@ -11,10 +11,28 @@ const AWS_CONFIG_FILE = join(homedir(), '.aws/config')
 const AWS_CREDS_FILE = join(homedir(), '.aws/credentials')
 const AWS_SSO_FOLDER = join(homedir(), '.aws/sso/cache/')
 const AWS_CLI_FOLDER = join(homedir(), '.aws/cli/cache/')
+const DEFAULT_CONFIG = 
+`[default]
+region = ap-southeast-1
+output = json
+
+`
+const DEFAULT_CREDS = 
+`[default]
+aws_access_key_id = 1234_DUMMY
+aws_secret_access_key = 4567_DUMMY
+
+`
 
 const awsExists = isCommandExist('aws')
-const awsCliV2Exists = () => catchErrors((async () => {
-	await awsExists()
+const awsCliV2Exists = noFailIfMissing => catchErrors((async () => {
+	const [awsCliErrors] = await awsExists()
+	if (awsCliErrors) {
+		if (noFailIfMissing)
+			return false
+		throw wrapErrors('AWS CLI error', awsCliErrors)
+	}
+
 	const data = await exec('aws --version') || ''
 	const [majorVersion] = ((data.match(/aws-cli\/(.*?)\s/g)||[])[0]||'').replace('aws-cli/','').split('.')
 	const version = majorVersion*1
@@ -22,6 +40,8 @@ const awsCliV2Exists = () => catchErrors((async () => {
 		throw new Error('Fail to test the AWS CLI version. Please try to run "aws --version" manually to try to debug this issue.')
 	if (version <= 1)
 		throw new Error(`AWS CLI version ${version} is not supported. Please upgrade to AWS CLI v2 or greater.`)
+
+	return true
 })())
 
 const getParam = (params, paramName) => {
@@ -33,25 +53,36 @@ const getParam = (params, paramName) => {
 }
 
 const getCredsFile = () => catchErrors((async () => {
-	const errMsg = `Fail to get the content from the ${AWS_CREDS_FILE} file.`
 	const credsExist = await fileHelper.exists(AWS_CREDS_FILE)
 	if (!credsExist)
-		throw wrapErrors(errMsg, [new Error(`AWS credentials file ${AWS_CREDS_FILE} not found.`)])
+		return ''
 	const credsStr = (await fileHelper.read(AWS_CREDS_FILE) || '').toString()
 
 	return credsStr
 })())
 
 const getConfigFile = () => catchErrors((async () => {
-	const errMsg = `Fail to get the content from the ${AWS_CONFIG_FILE} file.`
 	const credsExist = await fileHelper.exists(AWS_CONFIG_FILE)
 	if (!credsExist)
-		throw wrapErrors(errMsg, [new Error(`AWS config file ${AWS_CONFIG_FILE} not found.`)])
+		return ''
 	const credsStr = (await fileHelper.read(AWS_CONFIG_FILE) || '').toString()
 
 	return credsStr
 })())
 
+/**
+ * Gets all the profiles stored in the ~/.aws/config file. 
+ * 
+ * @return {[Error]}
+ * @return {String}		profiles[].name				e.g., 'hello'
+ * @return {String}		profiles[].friendlyName		e.g., 'hello (SSO [role:"god"  account:1234])'
+ * @return {String}		profiles[].region			e.g., 'us-weat-1'
+ * @return {String}		profiles[].output			e.g., 'json'
+ * @return {String}		profiles[].sso_start_url	e.g., 'https://cloudless.awsapps.com/start'
+ * @return {String}		profiles[].sso_region		e.g., 'us-weat-1'
+ * @return {String}		profiles[].sso_account_id	e.g., '1234'
+ * @return {String}		profiles[].sso_role_name	e.g., 'god'
+ */
 const listProfiles = () => catchErrors((async () => {
 	await awsCliV2Exists()
 	const [configStrErrors, configStr] = await getConfigFile()
@@ -290,27 +321,43 @@ const getCredentials = (profile, ssoUrl) => catchErrors((async () => {
 })())
 
 
-const updateDefaultProfile = ({ profile, expiry_date, aws_access_key_id, aws_secret_access_key, aws_session_token }) => catchErrors((async () => {
+const updateDefaultProfile = ({ profile, region, expiry_date, aws_access_key_id, aws_secret_access_key, aws_session_token }) => catchErrors((async () => {
 	const errMsg = `Fail to update the ${AWS_CREDS_FILE} file`
-	const [errors, credsStr] = await getCredsFile()
-	if (errors)
-		throw wrapErrors(errMsg, errors)
+	const [configStrErrors, configStr] = await getConfigFile()
+	const [credsStrErrors, credsStr] = await getCredsFile()
+	if (credsStrErrors||configStrErrors)
+		throw wrapErrors(errMsg, credsStrErrors||configStrErrors)
 
-	const defaultSection = (credsStr.match(/\[default\]((.|\n|\r)*?)(\[|$)/)||[])[0]
-	if (!defaultSection)
-		throw wrapErrors(errMsg, [new Error('\'default\' profile not found.')])
-
-	const lastChar = defaultSection.slice(-1)
-	const updatedCreds = credsStr.replace(
-		defaultSection,
-		'[default]'+EOL+
+	const newDefaultCreds = '[default]'+EOL+
 		`aws_access_key_id = ${aws_access_key_id}`+EOL+
 		`aws_secret_access_key = ${aws_secret_access_key}`+EOL+
 		(aws_session_token ? `aws_session_token = ${aws_session_token}`+EOL : '') +
 		(expiry_date ? `expiry_date = ${expiry_date.toISOString()}`+EOL : '') +
-		`profile = ${profile}`+EOL+EOL+lastChar)
+		`profile = ${profile}`+EOL+EOL
+
+	const newDefaultConfig = '[default]'+EOL+
+		`region = ${region}`+EOL+
+		'output = json'+EOL+EOL
+
+	const defaultCredsSection = (credsStr.match(/\[default\]((.|\n|\r)*?)(\[|$)/)||[])[0]
+	const defaultConfigSection = (configStr.match(/\[default\]((.|\n|\r)*?)(\[|$)/)||[])[0]
+
+	let updatedCreds = ''
+	if (defaultCredsSection) {
+		const lastChar = defaultCredsSection.slice(-1)
+		updatedCreds = credsStr.replace(defaultCredsSection, newDefaultCreds+lastChar)
+	} else
+		updatedCreds = newDefaultCreds + credsStr
+
+	let updatedConfig = ''
+	if (defaultConfigSection) {
+		const lastChar = defaultConfigSection.slice(-1)
+		updatedConfig = configStr.replace(defaultConfigSection, newDefaultConfig+lastChar)
+	} else
+		updatedConfig = newDefaultConfig + configStr
 	
 	await fileHelper.write(AWS_CREDS_FILE, updatedCreds)
+	await fileHelper.write(AWS_CONFIG_FILE, updatedConfig)
 })())
 
 const getDefaultProfile = () => catchErrors((async () => {
@@ -318,7 +365,7 @@ const getDefaultProfile = () => catchErrors((async () => {
 	const [errors, credsStr] = await getCredsFile()
 	if (errors)
 		throw wrapErrors(errMsg, errors)
-	
+
 	const params = ((credsStr.match(/\[default\]((.|\n|\r)*?)(\[|$)/)||[])[0]||'').split(EOL)
 	const creds = {
 		aws_access_key_id: getParam(params, 'aws_access_key_id'),
@@ -370,14 +417,19 @@ const deleteProfiles = profiles => catchErrors((async () => {
 	if (configStrErrors || credsStrErrors)
 		throw wrapErrors(errMsg, configStrErrors || credsStrErrors)
 
+	const updateConfig = configStr
+	const updateCreds = credsStr
+
 	for (let i=0;i<profiles.length;i++) {
 		const profile = profiles[i]
 		configStr = deleteProfileFromConfig(profile, configStr)
 		credsStr = deleteProfileFromCreds(profile, credsStr)
 	}
 
-	await fileHelper.write(AWS_CONFIG_FILE, configStr)
-	await fileHelper.write(AWS_CREDS_FILE, credsStr)
+	if (updateConfig)
+		await fileHelper.write(AWS_CONFIG_FILE, configStr)
+	if (updateCreds)
+		await fileHelper.write(AWS_CREDS_FILE, credsStr)
 })())
 
 const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region }) => catchErrors((async () => {
@@ -410,6 +462,11 @@ const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region 
 	const newCreds = credsProfiles.join('')
 	const newConfig = configProfiles.join('')
 
+	if (!configStr)
+		configStr = DEFAULT_CONFIG
+	if (!credsStr)
+		credsStr = DEFAULT_CREDS
+
 	await fileHelper.write(AWS_CONFIG_FILE, configStr+EOL+newConfig)
 	await fileHelper.write(AWS_CREDS_FILE, credsStr+EOL+newCreds)
 })())
@@ -430,6 +487,7 @@ module.exports = {
 	deleteProfiles,
 	createProfile,
 	createSsoProfile,
-	regions
+	regions,
+	awsCliV2Exists
 }
 

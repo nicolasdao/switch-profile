@@ -6,7 +6,7 @@
 const program = require('commander')
 const inquirer = require('inquirer')
 const { EOL } = require('os')
-const { listProfiles, getCredentials, getDefaultProfile, updateDefaultProfile, deleteProfiles, createProfile, regions, createSsoProfile } = require('./src/aws')
+const { listProfiles, getCredentials, getDefaultProfile, updateDefaultProfile, deleteProfiles, createProfile, regions, createSsoProfile, awsCliV2Exists } = require('./src/aws')
 const { printAWSerrors } = require('./src/core')
 require('colors')
 const { version } = require('./package.json')
@@ -91,7 +91,75 @@ const chooseRegions = async () => {
 	return region
 }
 
+const createNewProfile = async (profiles, makeItDefault) => {
+	const name = await chooseProfileName(profiles.map(p => p.name))
+	const { type } = await inquirer.prompt([
+		{ 
+			type: 'list', 
+			name: 'type', 
+			message: 'Choose an AWS profile type: ',
+			choices: ['standard','sso']
+		}
+	])
+
+	if (type == 'standard') {
+		const aws_access_key_id = await chooseNonEmpty('aws_access_key_id', 'Enter the profile\'s access key:')
+		const aws_secret_access_key = await chooseNonEmpty('aws_secret_access_key', 'Enter the profile\'s access secret key:')
+		const region = await chooseRegions()
+		const [profileErrors] = await createProfile({ name, aws_access_key_id, aws_secret_access_key, region })
+		if (profileErrors)
+			return printAWSerrors([new Error('Fail to create profile'), ...profileErrors])
+	} else
+		await createSsoProfile(name)
+
+	console.log(`New profile ${name.bold} successfully created 🚀`.green)
+
+	if (makeItDefault === false)
+		return 
+
+	if (makeItDefault === undefined) {
+		const { setAsDefault } = await inquirer.prompt([
+			{ 
+				type: 'confirm', 
+				name: 'setAsDefault', 
+				message: 'Do you wish to set this new profile as the default?',
+			}
+		])
+
+		if (!setAsDefault)
+			return  
+	}
+
+	const [listErrors2, profiles2] = await listProfiles()
+	if (listErrors2)
+		return printAWSerrors([new Error('Fail to list profiles'), ...listErrors2])
+
+	await setProfileToDefault(name, profiles2)
+}
+
 const switchCmd = async () => {
+	const [awsCliErrors, awsCliExists] = await awsCliV2Exists(true)
+	if (awsCliErrors)
+		return printAWSerrors(awsCliErrors, { noStack:true })
+
+	if (!awsCliExists) {
+		if (process.platform == 'darwin') {
+			console.log('AWS CLI seems to not be installed. Try installing it as follow\n'.red)
+			console.log('brew install awscli')
+			console.log('brew link --overwrite awscli')
+			return 
+		} else if (process.platform == 'win32') {
+			console.log('AWS CLI seems to not be installed.'.red)
+			return
+		} else {
+			console.log('AWS CLI seems to not be installed. Try installing it as follow\n'.red)
+			console.log('curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"')
+			console.log('unzip awscli-bundle.zip')
+			console.log('sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws')
+			return 
+		}
+	}
+
 	const [defaultProfileErrors, defaultProfile] = await getDefaultProfile()
 	if (defaultProfileErrors)
 		return printAWSerrors([new Error('Fail to get default profile'), ...defaultProfileErrors])
@@ -124,136 +192,115 @@ const switchCmd = async () => {
 		return printAWSerrors([new Error('Fail to list profiles'), ...listErrors])
 
 	const profileCount = profiles.length
-	const { friendlyName } = await inquirer.prompt([
-		{ 
-			type: 'list', 
-			name: 'friendlyName', 
-			message: `Choose one of the following ${profileCount} profiles:`,
-			pageSize:20,
-			default: 2,
-			choices: [
-				{ name:'More options', value:OPTIONS_KEY }, 
-				{ name: 'Abort', value:ABORT_KEY }, 
-				new inquirer.Separator(), ...profiles.map((p,i) => {
-					return { 
-						name: `${i+1}. ${p.friendlyName}`, 
-						value: p.friendlyName
-					}
-				})]
-		}
-	])
-	
-	if (!friendlyName || friendlyName == ABORT_KEY)
-		return
 
-	if (friendlyName == OPTIONS_KEY) {
-		const { option } = await inquirer.prompt([
+	if (!profileCount) {
+		const { create } = await inquirer.prompt([
 			{ 
-				type: 'list', 
-				name: 'option', 
-				message: 'Options:',
-				pageSize:20,
-				choices: [
-					...(defaultProfileExpired ? [{ name: `Refresh default profile ${defaultProfileName.bold}` ,value:'refresh' }] : []),
-					{ name: 'Create profile', value:'new' }, 
-					{ name: 'Delete profiles', value:'delete' },
-					{ name: 'Abort', value:ABORT_KEY }
-				]
+				type: 'confirm', 
+				name: 'create', 
+				message: 'There no profiles yet. Do you wish to create one now? ',
 			}
 		])
 
-		if (option == 'refresh')
-			await setProfileToDefault(defaultProfileName, profiles, `AWS profile ${defaultProfileName.bold} successfully refreshed.`)
-		else if (option == 'delete') {
-			const { delProfiles } = await inquirer.prompt([
-				{ 
-					type: 'checkbox', 
-					name: 'delProfiles', 
-					message: 'Select the profiles you which to delete: ',
-					pageSize: 20,
-					choices: profiles.map((p,i) => {
+		if (!create)
+			return 
+
+		console.log('Ooh yeah ✨! I like your style. Let\'s do this!'.cyan)
+		await createNewProfile([], true)
+	} else {
+		const { friendlyName } = await inquirer.prompt([
+			{ 
+				type: 'list', 
+				name: 'friendlyName', 
+				message: `Choose one of the following ${profileCount} profiles:`,
+				pageSize:20,
+				default: 2,
+				choices: [
+					{ name:'More options', value:OPTIONS_KEY }, 
+					{ name: 'Abort', value:ABORT_KEY }, 
+					new inquirer.Separator(), ...profiles.map((p,i) => {
 						return { 
 							name: `${i+1}. ${p.friendlyName}`, 
-							value: p.name
+							value: p.friendlyName
 						}
-					})
-				}
-			])
-
-			if (!delProfiles.length)
-				return 
-
-			const label = delProfiles.length > 1 ? 'profiles' : 'profile'
-			const labelText = delProfiles.length > 1 ? `those ${delProfiles.length} profiles` : 'this profile'
-			const { delConfirm } = await inquirer.prompt([
-				{ 
-					type: 'confirm', 
-					name: 'delConfirm', 
-					message: `Are you sure you want to delete ${labelText}?`,
-				}
-			])
-
-			if (!delConfirm)
-				return 
-
-			if (defaultProfileName && delProfiles.some(p => p == defaultProfileName))
-				return printAWSerrors([new Error(`Fail to delete ${label}. Profile ${defaultProfileName.bold} is the current default. Set another profile as the default, then try deleting again.`)], { noStack:true })
-
-			const [delErrors] = await deleteProfiles(delProfiles)
-			if (delErrors)
-				return printAWSerrors([new Error(`Fail to delete ${label}`), ...delErrors])
-
-			console.log(`AWS profile${delProfiles.length > 1 ? 's' : ''} successfully deleted.`.green)
-		} else if (option == 'new') {
-			const name = await chooseProfileName(profiles.map(p => p.name))
-			const { type } = await inquirer.prompt([
-				{ 
-					type: 'list', 
-					name: 'type', 
-					message: 'Choose an AWS profile type: ',
-					choices: ['standard','sso']
-				}
-			])
-
-			if (type == 'standard') {
-				const aws_access_key_id = await chooseNonEmpty('aws_access_key_id', 'Enter the profile\'s access key:')
-				const aws_secret_access_key = await chooseNonEmpty('aws_secret_access_key', 'Enter the profile\'s access secret key:')
-				const region = await chooseRegions()
-				const [profileErrors] = await createProfile({ name, aws_access_key_id, aws_secret_access_key, region })
-				if (profileErrors)
-					return printAWSerrors([new Error('Fail to create profile'), ...profileErrors])
-			} else
-				await createSsoProfile(name)
-
-			console.log(`New profile ${name.bold} successfully created 🚀`.green)
-
-			const { setAsDefault } = await inquirer.prompt([
-				{ 
-					type: 'confirm', 
-					name: 'setAsDefault', 
-					message: 'Do you wish to set this new profile as the default?',
-				}
-			])
-
-			if (!setAsDefault)
-				return  
-
-			const [listErrors2, profiles2] = await listProfiles()
-			if (listErrors2)
-				return printAWSerrors([new Error('Fail to list profiles'), ...listErrors2])
-
-			await setProfileToDefault(name, profiles2)
-		} else if (option == ABORT_KEY)
+					})]
+			}
+		])
+		
+		if (!friendlyName || friendlyName == ABORT_KEY)
 			return
 
-		return 
-	} else
-		await setProfileToDefault(friendlyName, profiles)
+		if (friendlyName == OPTIONS_KEY) {
+			const { option } = await inquirer.prompt([
+				{ 
+					type: 'list', 
+					name: 'option', 
+					message: 'Options:',
+					pageSize:20,
+					choices: [
+						...(defaultProfileExpired ? [{ name: `Refresh default profile ${defaultProfileName.bold}` ,value:'refresh' }] : []),
+						{ name: 'Create profile', value:'new' }, 
+						{ name: 'Delete profiles', value:'delete' },
+						{ name: 'Abort', value:ABORT_KEY }
+					]
+				}
+			])
+
+			if (option == 'refresh')
+				await setProfileToDefault(defaultProfileName, profiles, `AWS profile ${defaultProfileName.bold} successfully refreshed.`)
+			else if (option == 'delete') {
+				const { delProfiles } = await inquirer.prompt([
+					{ 
+						type: 'checkbox', 
+						name: 'delProfiles', 
+						message: 'Select the profiles you which to delete: ',
+						pageSize: 20,
+						choices: profiles.map((p,i) => {
+							return { 
+								name: `${i+1}. ${p.friendlyName}`, 
+								value: p.name
+							}
+						})
+					}
+				])
+
+				if (!delProfiles.length)
+					return 
+
+				const label = delProfiles.length > 1 ? 'profiles' : 'profile'
+				const labelText = delProfiles.length > 1 ? `those ${delProfiles.length} profiles` : 'this profile'
+				const { delConfirm } = await inquirer.prompt([
+					{ 
+						type: 'confirm', 
+						name: 'delConfirm', 
+						message: `Are you sure you want to delete ${labelText}? `,
+					}
+				])
+
+				if (!delConfirm)
+					return 
+
+				if (defaultProfileName && delProfiles.some(p => p == defaultProfileName))
+					return printAWSerrors([new Error(`Fail to delete ${label}. Profile ${defaultProfileName.bold} is the current default. Set another profile as the default, then try deleting again.`)], { noStack:true })
+
+				const [delErrors] = await deleteProfiles(delProfiles)
+				if (delErrors)
+					return printAWSerrors([new Error(`Fail to delete ${label}`), ...delErrors])
+
+				console.log(`AWS profile${delProfiles.length > 1 ? 's' : ''} successfully deleted.`.green)
+			} else if (option == 'new')
+				await createNewProfile(profiles)
+			else if (option == ABORT_KEY)
+				return
+
+			return 
+		} else
+			await setProfileToDefault(friendlyName, profiles)
+	}
 }
 
 const setProfileToDefault = async (profileName, profileList, successMsg) => {
 	const profile = profileList.find(p => p.friendlyName == profileName || p.name == profileName)
-	// console.log(profile)
 
 	// Gets the AWS credentials for a specific profile. If that profile is an SSO profile, this function has a series of
 	// side-effects:
@@ -267,7 +314,8 @@ const setProfileToDefault = async (profileName, profileList, successMsg) => {
 
 	const [errors] = await updateDefaultProfile({
 		...creds,
-		profile: profile.name
+		profile: profile.name,
+		region: profile.region
 	})
 
 	if (errors)

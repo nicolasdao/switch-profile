@@ -1,4 +1,5 @@
 require('colors')
+const { error: { catchErrors } } = require('puffy')
 const { exec } = require('child_process')
 
 const IS_WINDOWS = process.platform == 'win32'
@@ -13,7 +14,7 @@ const _exec = cmd => new Promise((next,fail) => {
 })
 
 const _commandExistsResult = {}
-const isCommandExist = (cmd, errorMsg) => async () => {
+const isCommandExist = (cmd, errorMsg) => () => catchErrors((async () => {
 	if (!cmd)
 		return false
 
@@ -28,7 +29,7 @@ const isCommandExist = (cmd, errorMsg) => async () => {
 
 	_commandExistsResult[cmd] = true
 	return true
-}
+})())
 
 /**
  * 
