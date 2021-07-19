@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.9](https://github.com/nicolasdao/switch-profile/compare/v0.0.8...v0.0.9) (2021-07-19)
+
+
+### Bug Fixes
+
+* Switching does not update the region in the ~/.aws/config ([14d6724](https://github.com/nicolasdao/switch-profile/commit/14d672429d81e3c421273d1e090fa4d444a09b5b))
+
 ### [0.0.8](https://github.com/nicolasdao/switch-profile/compare/v0.0.7...v0.0.8) (2021-07-19)
 
 ### [0.0.7](https://github.com/nicolasdao/switch-profile/compare/v0.0.6...v0.0.7) (2021-07-18)
