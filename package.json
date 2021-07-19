@@ -4,6 +4,7 @@
   "main": "index.js",
   "bin": "index.js",
   "description": "NPX script that exposes terminal shortcut to easily switch between cloud configuration (aws, gcp).",
+  "keywords": ["aws-cli", "aws", "profile", "sso-profile", "sso"],
   "repository": {
     "type": "git",
     "url": "https://github.com/nicolasdao/switch-profile.git"
