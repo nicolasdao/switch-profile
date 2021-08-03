@@ -33,15 +33,19 @@ const awsCliV2Exists = noFailIfMissing => catchErrors((async () => {
 		throw wrapErrors('AWS CLI error', awsCliErrors)
 	}
 
-	const data = await exec('aws --version') || ''
-	const [majorVersion] = ((data.match(/aws-cli\/(.*?)\s/g)||[])[0]||'').replace('aws-cli/','').split('.')
-	const version = majorVersion*1
-	if (isNaN(version))
-		throw new Error('Fail to test the AWS CLI version. Please try to run "aws --version" manually to try to debug this issue.')
-	if (version <= 1)
-		throw new Error(`AWS CLI version ${version} is not supported. Please upgrade to AWS CLI v2 or greater.`)
+	try {
+		const data = await exec('aws --version') || ''
+		const [majorVersion] = ((data.match(/aws-cli\/(.*?)\s/g)||[])[0]||'').replace('aws-cli/','').split('.')
+		const version = majorVersion*1
+		if (isNaN(version))
+			throw new Error('Fail to test the AWS CLI version. Please try to run "aws --version" manually to try to debug this issue.')
+		if (version <= 1)
+			throw new Error(`AWS CLI version ${version} is not supported. Please upgrade to AWS CLI v2 or greater.`)
 
-	return true
+		return true
+	} catch(err) {
+		throw wrapErrors('Fail to check AWS CLI\'s version', [err])
+	}
 })())
 
 const getParam = (params, paramName) => {
@@ -223,27 +227,39 @@ const getSsoCredsFromCacheFile = (access_key_end, secret_key_end) => catchErrors
 const getSsoCredentials = profile => catchErrors((async () => {
 	await awsCliV2Exists()
 	const errMsg = `Fail to get AWS SSO credentials for profile ${profile}`
-	if (!profile)
-		throw wrapErrors(errMsg, [new Error('Missing required \'profile\' argument')])
-	const data = await exec(`aws configure list --profile ${profile}`) || ''
-	const access_key_end = ((data.match(/access_key\s*\*+.{4}/g)||[])[0]||'').slice(-4)
-	const secret_key_end = ((data.match(/secret_key\s*\*+.{4}/g)||[])[0]||'').slice(-4)
+	try {
+		if (!profile)
+			throw wrapErrors(errMsg, [new Error('Missing required \'profile\' argument')])
+		const data = await exec(`aws configure list --profile ${profile}`) || ''
+		const access_key_end = ((data.match(/access_key\s*\*+.{4}/g)||[])[0]||'').slice(-4)
+		const secret_key_end = ((data.match(/secret_key\s*\*+.{4}/g)||[])[0]||'').slice(-4)
 
-	if (!access_key_end || !secret_key_end)
-		return null 
+		if (!access_key_end || !secret_key_end)
+			return null 
 
-	const [ssoCredsErrors, creds] = await getSsoCredsFromCacheFile(access_key_end, secret_key_end)
-	if (ssoCredsErrors)
-		throw wrapErrors(errMsg, ssoCredsErrors)
-	return creds
+		const [ssoCredsErrors, creds] = await getSsoCredsFromCacheFile(access_key_end, secret_key_end)
+		if (ssoCredsErrors)
+			throw wrapErrors(errMsg, ssoCredsErrors)
+		return creds
+	} catch(err) {
+		throw wrapErrors(errMsg, [err])
+	}
 })())
+
+const isSSOexpired = ssoSession => {
+	if (!ssoSession)
+		return true
+
+	return (new Date(ssoSession.expiresAt).getTime() - Date.now()) < (2*60*1000)
+}
 
 /**
  * Makes sure the profile is using a valid (i.e., exists and not expired) local SSO session. If not, try 
  * to create one manually by redirecting the user to the SSO page. 
  * 
- * @param  {String} profile		e.g., 'sso-dev-cloudless'
- * @param  {String} ssoUrl 		e.g., 'https://cloudless.awsapps.com/start'
+ * @param  {String}  profile			e.g., 'sso-dev-cloudless'
+ * @param  {String}  ssoUrl 			e.g., 'https://cloudless.awsapps.com/start'
+ * @param  {Boolean} options.force		
  * 
  * @return {[Error]} 
  * @return {String} session.aws_access_key_id		e.g., '********1234'
@@ -251,32 +267,38 @@ const getSsoCredentials = profile => catchErrors((async () => {
  * @return {String} session.aws_session_token		e.g., 'dwqdwdwqd...dwqdqw'
  * @return {Date}   session.expiry_date				e.g., 2021-07-17T11:33:12Z
  */
-const refreshSsoSession = (profile, ssoUrl) => catchErrors((async () => {
+const refreshSsoSession = (profile, ssoUrl, options) => catchErrors((async () => {
 	const errMsg = `Fail to refresh the SSO session for AWS profile ${profile}`
 	let [ssoSessionErrors, ssoSession] = await getSsoSession(ssoUrl)
 	if (ssoSessionErrors)
 		throw wrapErrors(errMsg, ssoSessionErrors)
 
-	// No valid SSO session found. Manually get a new one via the SSO portal
-	const startTime = Date.now()
-	if (!ssoSession) {
-		await exec(`aws sso login --profile ${profile}`)
-		while (!ssoSession && Date.now() - startTime < SSO_GET_CREDS_TIMEOUT) {
-			const resp = await getSsoSession(ssoUrl)
-			if (resp[0])
-				throw wrapErrors(errMsg, resp[0])
-			ssoSession = resp[1]
-			if (!ssoSession)
-				await delay(2000)
-		}
-	}
+	const { force } = options || {}
 
-	if (ssoSession)
-		return ssoSession 
-	else if (Date.now() - startTime > SSO_GET_CREDS_TIMEOUT)
-		throw wrapErrors(errMsg, [new Error(`Timeout - Time to wait for refreshing the SSO session for profile ${profile} exceeded ${SSO_GET_CREDS_TIMEOUT}ms.`)])
-	else
-		return null
+	try {
+		// No valid SSO session found. Manually get a new one via the SSO portal
+		const startTime = Date.now()
+		if (force || isSSOexpired(ssoSession)) {
+			await exec(`aws sso login --profile ${profile}`)
+			while (!ssoSession && Date.now() - startTime < SSO_GET_CREDS_TIMEOUT) {
+				const resp = await getSsoSession(ssoUrl)
+				if (resp[0])
+					throw wrapErrors(errMsg, resp[0])
+				ssoSession = resp[1]
+				if (!ssoSession)
+					await delay(2000)
+			}
+		}
+
+		if (ssoSession)
+			return ssoSession 
+		else if (Date.now() - startTime > SSO_GET_CREDS_TIMEOUT)
+			throw wrapErrors(errMsg, [new Error(`Timeout - Time to wait for refreshing the SSO session for profile ${profile} exceeded ${SSO_GET_CREDS_TIMEOUT}ms.`)])
+		else
+			return null
+	} catch(err) {
+		throw wrapErrors(errMsg, [err])
+	}
 })())
 
 /**
@@ -299,9 +321,19 @@ const getCredentials = (profile, ssoUrl) => catchErrors((async () => {
 	const errMsg = `Fail to get AWS credentials for profile ${profile}`
 	if (ssoUrl) {
 		await refreshSsoSession(profile, ssoUrl)
-		const [ssoCredsErrors, ssoCreds] = await getSsoCredentials(profile)
-		if (ssoCredsErrors)
-			throw wrapErrors(errMsg, ssoCredsErrors)
+		let [ssoCredsErrors, ssoCreds] = await getSsoCredentials(profile)
+		if (ssoCredsErrors) {
+			const ssoSessionIsInvalid = ssoCredsErrors.some(e => e.message && e.message.toLowerCase().indexOf('session associated with this profile has expired') >= 0)
+			if (ssoSessionIsInvalid) {
+				await refreshSsoSession(profile, ssoUrl, { force:true })
+				const resp = await getSsoCredentials(profile)
+				if (resp[0])
+					throw wrapErrors(errMsg, resp[0])
+
+				ssoCreds = resp[1]
+			} else
+				throw wrapErrors(errMsg, ssoCredsErrors)
+		}
 
 		return ssoCreds
 	} else {
