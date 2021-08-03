@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.1](https://github.com/nicolasdao/switch-profile/compare/v0.1.0...v0.1.1) (2021-08-03)
+
+
+### Bug Fixes
+
+* Edge cases where the SSO session expires and a forde login is required ([67f3667](https://github.com/nicolasdao/switch-profile/commit/67f36678f29f2ab5f02c4d4630eb1c7c41ccebbf))
+
 ## [0.1.0](https://github.com/nicolasdao/switch-profile/compare/v0.0.9...v0.1.0) (2021-08-03)
 
 
