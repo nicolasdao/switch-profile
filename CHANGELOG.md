@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.1.0](https://github.com/nicolasdao/switch-profile/compare/v0.0.9...v0.1.0) (2021-08-03)
+
+
+### Bug Fixes
+
+* Switching to an SSO profile adds an incorrect 'sso_' prefix to the default region in ~/.aws/config file ([384c17e](https://github.com/nicolasdao/switch-profile/commit/384c17e26b368754a5bfdb5ca47fd9996181f3b7))
+
 ### [0.0.9](https://github.com/nicolasdao/switch-profile/compare/v0.0.8...v0.0.9) (2021-07-19)
 
 
