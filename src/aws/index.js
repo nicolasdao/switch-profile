@@ -107,6 +107,9 @@ const listProfiles = () => catchErrors((async () => {
 			output: getParam(params, 'output')
 		}
 
+		if (p.sso_region)
+			p.region = p.sso_region
+
 		p.friendlyName = `${p.name}${p.sso_start_url ? ` (SSO [role:${p.sso_role_name||'unknown'} - account:${p.sso_account_id||'unknown'}])` : ''}`
 
 		return p 
