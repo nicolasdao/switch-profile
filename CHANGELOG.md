@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.2](https://github.com/nicolasdao/switch-profile/compare/v0.1.1...v0.1.2) (2022-05-14)
+
+
+### Bug Fixes
+
+* Multiple SSO profiles are not supported. It only uses one. ([b9d9d03](https://github.com/nicolasdao/switch-profile/commit/b9d9d03b4edfa048cc157376222378513138e257))
+
 ### [0.1.1](https://github.com/nicolasdao/switch-profile/compare/v0.1.0...v0.1.1) (2021-08-03)
 
 
