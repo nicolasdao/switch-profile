@@ -15,7 +15,26 @@ This utility also supports creating new AWS profiles, including SSO profiles as 
 >	- `AWS_SECRET_ACCESS_KEY`
 >	- `AWS_SESSION_TOKEN`
 
-# Why using this utility?
+# Table of contents
+
+> * [Extra features](#extra-features)
+> * [FAQ](#faq)
+>	- [Why using this utility?](#why-using-this-utility)
+>	- [How to create a new SSO profile?](#how-to-create-a-new-sso-profile)
+> * [Troubleshooting](#troubleshooting)
+>	- [`invalid_grant: Invalid grant provided`](#invalid_grant-invalid-grant-provided)
+>	- [`Error: Fail to get credentials for profile ... Error loading SSO Token...`](#error-fail-to-get-credentials-for-profile--error-loading-sso-token)
+> * [License](#license)
+
+# Extra features
+
+The `More options` supports the following:
+- `Create profile`: Helps create both a standard or AWS SSO profile.
+- `Delete profiles`: Helps cleaning one or many profiles.
+- `Refresh default profile`: Helps refreshing the current default profile if it has expired (e.g., SSO profile). This option only appears when the default profile has expired.
+
+# FAQ
+## Why using this utility?
 
 `switch-profile` was originally created to refresh short-lived AWS SSO profiles in the terminal and set them as default. Indeed, as of 2021, the only two ways to set up a short-lived SSO profile as default in the terminal are:
 - Manually paste the short-lived credentials in the terminal:
@@ -31,12 +50,22 @@ The issue with the first method is that you have to repeat it every hour, which 
 
 `switch-profile` aims to solve those issues by making setting any profile as `default` trivial. 
 
-# Extra features
+## How to create a new SSO profile?
 
-The `More options` supports the following:
-- `Create profile`: Helps create both a standard or AWS SSO profile.
-- `Delete profiles`: Helps cleaning one or many profiles.
-- `Refresh default profile`: Helps refreshing the current default profile if it has expired (e.g., SSO profile). This option only appears when the default profile has expired.
+1. `npx switch-profile`
+2. Select `More options`, then `Create profile`.
+3. Answer all the questions.
+
+# Troubleshooting
+## `invalid_grant: Invalid grant provided`
+
+If this error occurs during a [profile creation step](#how-to-create-a-new-sso-profile), this is most likely due to an incorrect SSO region. AWS SSO is region specific. This error occurs if an incorrect region is specified during the [profile creation step](#how-to-create-a-new-sso-profile).
+
+## `Error: Fail to get credentials for profile ... Error loading SSO Token...`
+
+This is probably due to a recent deletion of the `~/.aws/sso/cache` folder. This folder keeps track of the SSO profiles created on the local machine. Unfortunately in this case, there is no other option but to recreate all the SSO profiles manually:
+1. Execute `npx switch-profile`
+2. Select `More options`, then `Delete profiles`.
 
 # License
 

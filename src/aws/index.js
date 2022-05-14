@@ -7,10 +7,10 @@ const fileHelper = require('../fileHelper')
 const regions = require('./regions')
 
 const SSO_GET_CREDS_TIMEOUT = 5*60*1000 // 5 minutes to complete the SSO login
-const AWS_CONFIG_FILE = join(homedir(), '.aws/config')
-const AWS_CREDS_FILE = join(homedir(), '.aws/credentials')
-const AWS_SSO_FOLDER = join(homedir(), '.aws/sso/cache/')
-const AWS_CLI_FOLDER = join(homedir(), '.aws/cli/cache/')
+const AWS_CONFIG_FILE = join(homedir(), '.aws', 'config')
+const AWS_CREDS_FILE = join(homedir(), '.aws', 'credentials')
+const AWS_SSO_FOLDER = join(homedir(), '.aws', 'sso', 'cache')
+const AWS_CLI_FOLDER = join(homedir(), '.aws', 'cli', 'cache')
 const DEFAULT_CONFIG = 
 `[default]
 region = ap-southeast-1
@@ -189,14 +189,15 @@ const getSsoCredsFromCacheFile = (access_key_end, secret_key_end) => catchErrors
 
 	for (let i=0;i<files.length;i++) {
 		const _creds = await fileHelper.json.get(files[i])
+
 		// Creds must be SSO
 		if (!_creds || _creds.ProviderType != 'sso' || !_creds.Credentials)
 			continue
 
 		// Creds must still be valid for the next 2 minutes
 		if (_creds.Credentials.Expiration && (Date.now() - 2*60*1000) < new Date(_creds.Credentials.Expiration).getTime()) {
-			const credsMatch = _creds.Credentials.AccessKeyId||''.slice(-4) == access_key_end && 
-				_creds.Credentials.SecretAccessKey||''.slice(-4) == secret_key_end
+			const credsMatch = (_creds.Credentials.AccessKeyId||'').slice(-4) == access_key_end && 
+				(_creds.Credentials.SecretAccessKey||'').slice(-4) == secret_key_end
 
 			if (credsMatch)
 				return {
@@ -238,6 +239,7 @@ const getSsoCredentials = profile => catchErrors((async () => {
 			return null 
 
 		const [ssoCredsErrors, creds] = await getSsoCredsFromCacheFile(access_key_end, secret_key_end)
+
 		if (ssoCredsErrors)
 			throw wrapErrors(errMsg, ssoCredsErrors)
 		return creds

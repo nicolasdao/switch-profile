@@ -310,6 +310,7 @@ const setProfileToDefault = async (profileName, profileList, successMsg) => {
 	if (credsErrors)
 		return printAWSerrors([new Error(`Fail to get credentials for profile ${profile.name}`), ...credsErrors])
 
+	// console.log(profile)
 	// console.log(creds)
 
 	const [errors] = await updateDefaultProfile({
