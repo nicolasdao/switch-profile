@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.2.0](https://github.com/nicolasdao/switch-profile/compare/v0.1.2...v0.2.0) (2026-02-08)
+
+
+### Bug Fixes
+
+* handle SSO profile creation failure and improve SSO setup UX ([b0ee837](https://github.com/nicolasdao/switch-profile/commit/b0ee83791bfbc1208cc5fb6b6f2850d4cbd160c9))
+* vulnerabilities ([3fa2575](https://github.com/nicolasdao/switch-profile/commit/3fa2575156f3e07a6de9cd077f3f8f75f9bceafa))
+
 ### [0.1.2](https://github.com/nicolasdao/switch-profile/compare/v0.1.1...v0.1.2) (2022-05-14)
 
 
