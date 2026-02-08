@@ -109,8 +109,38 @@ const createNewProfile = async (profiles, makeItDefault) => {
 		const [profileErrors] = await createProfile({ name, aws_access_key_id, aws_secret_access_key, region })
 		if (profileErrors)
 			return printAWSerrors([new Error('Fail to create profile'), ...profileErrors])
-	} else
-		await createSsoProfile(name)
+	} else {
+		console.log('')
+		console.log('┌─────────────────────────────────────────────────────────────────────┐'.cyan)
+		console.log('│                     SSO Profile Setup Guide                         │'.cyan)
+		console.log('├─────────────────────────────────────────────────────────────────────┤'.cyan)
+		console.log('│                                                                     │'.cyan)
+		console.log('│  You\'re about to run \'aws configure sso\'. Here\'s what to expect:    │'.cyan)
+		console.log('│                                                                     │'.cyan)
+		console.log('│  1. SSO session name'.bold + '                                                │'.cyan)
+		console.log('│     Provide a name (e.g., "my-company-sso").                        │'.cyan)
+		console.log('│     This enables token reuse across profiles and automatic refresh.  │'.cyan)
+		console.log('│     Skipping this uses the legacy format (no auto-refresh).          │'.cyan)
+		console.log('│                                                                     │'.cyan)
+		console.log('│  2. SSO start URL'.bold + '                                                   │'.cyan)
+		console.log('│     Your AWS SSO portal URL (e.g., https://my-co.awsapps.com/start) │'.cyan)
+		console.log('│     Ask your AWS administrator if you don\'t have it.                 │'.cyan)
+		console.log('│                                                                     │'.cyan)
+		console.log('│  3. SSO region'.bold + '                                                      │'.cyan)
+		console.log('│     The region where your SSO instance is configured.                │'.cyan)
+		console.log('│     WARNING: This is NOT your deployment region.                     │'.yellow)
+		console.log('│     Using the wrong region causes "invalid_grant" errors.            │'.yellow)
+		console.log('│                                                                     │'.cyan)
+		console.log('│  Docs: https://docs.aws.amazon.com/cli/latest/userguide/            │'.cyan)
+		console.log('│        cli-configure-sso.html                                       │'.cyan)
+		console.log('│                                                                     │'.cyan)
+		console.log('└─────────────────────────────────────────────────────────────────────┘'.cyan)
+		console.log('')
+
+		const [ssoErrors] = await createSsoProfile(name)
+		if (ssoErrors)
+			return printAWSerrors([new Error(`Fail to create SSO profile ${name}`), ...ssoErrors])
+	}
 
 	console.log(`New profile ${name.bold} successfully created 🚀`.green)
 
@@ -301,6 +331,9 @@ const switchCmd = async () => {
 
 const setProfileToDefault = async (profileName, profileList, successMsg) => {
 	const profile = profileList.find(p => p.friendlyName == profileName || p.name == profileName)
+
+	if (!profile)
+		return printAWSerrors([new Error(`Profile ${profileName.bold} was not found in ~/.aws/config. It may not have been created correctly. Try creating it again.`)], { noStack:true })
 
 	// Gets the AWS credentials for a specific profile. If that profile is an SSO profile, this function has a series of
 	// side-effects:

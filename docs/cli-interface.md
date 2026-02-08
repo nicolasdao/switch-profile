@@ -138,7 +138,36 @@ The region picker supports autocomplete - type to filter the list of 24 regions.
 
 ### Step 3b: SSO Profile
 
-Selecting "sso" spawns the interactive `aws configure sso` command, which takes over the terminal:
+Selecting "sso" first displays an SSO Setup Guide with guidance on the prompts you're about to see:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     SSO Profile Setup Guide                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  You're about to run 'aws configure sso'. Here's what to expect:    │
+│                                                                     │
+│  1. SSO session name                                                │
+│     Provide a name (e.g., "my-company-sso").                        │
+│     This enables token reuse across profiles and automatic refresh.  │
+│     Skipping this uses the legacy format (no auto-refresh).          │
+│                                                                     │
+│  2. SSO start URL                                                   │
+│     Your AWS SSO portal URL (e.g., https://my-co.awsapps.com/start) │
+│     Ask your AWS administrator if you don't have it.                 │
+│                                                                     │
+│  3. SSO region                                                      │
+│     The region where your SSO instance is configured.                │
+│     WARNING: This is NOT your deployment region.                     │
+│     Using the wrong region causes "invalid_grant" errors.            │
+│                                                                     │
+│  Docs: https://docs.aws.amazon.com/cli/latest/userguide/            │
+│        cli-configure-sso.html                                       │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Then it spawns the interactive `aws configure sso` command, which takes over the terminal:
 
 ```
 SSO session name (Recommended): my-session
@@ -148,7 +177,7 @@ SSO registration scopes [sso:account:access]:
 ...
 ```
 
-This is the standard AWS CLI SSO setup flow. The user completes it directly.
+This is the standard AWS CLI SSO setup flow. The user completes it directly. If the `aws configure sso` command fails (non-zero exit code), the error is reported and the profile is not marked as created.
 
 ### Step 4: Set as Default
 
@@ -158,7 +187,7 @@ After creation, you're asked:
 ? Do you wish to set this new profile as the default? (Y/n)
 ```
 
-If yes, the profile is immediately set as the `default` (triggering SSO login if needed).
+If yes, the profile is immediately set as the `default` (triggering SSO login if needed). If the profile is not found in `~/.aws/config` (e.g., because the creation partially failed), a clear error message is shown instead of crashing.
 
 ## Delete Profiles Flow
 

@@ -510,10 +510,12 @@ const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region 
 
 const createSsoProfile = name => catchErrors((async () => {
 	await awsCliV2Exists()
-	await new Promise(next => {
+	const exitCode = await new Promise(next => {
 		const child = spawn('aws', ['configure', 'sso', '--profile', name],{ stdio: 'inherit' })
-		child.on('exit', next)
+		child.on('exit', code => next(code))
 	})
+	if (exitCode !== 0)
+		throw new Error(`'aws configure sso' exited with code ${exitCode}. The SSO profile may not have been created correctly.`)
 })())
 
 module.exports = {

@@ -198,7 +198,7 @@ If the config or credentials files don't exist, they are created with a default 
 
 Creates an SSO profile by spawning the interactive `aws configure sso --profile <name>` command. This hands control to the AWS CLI, which walks the user through the SSO setup (URL, region, account, role).
 
-Uses `spawn` with `stdio: 'inherit'` so the user interacts directly with the AWS CLI process.
+Uses `spawn` with `stdio: 'inherit'` so the user interacts directly with the AWS CLI process. Checks the exit code of the spawned process and throws an error if it is non-zero, indicating the SSO setup failed.
 
 #### `deleteProfiles(profiles)`
 
