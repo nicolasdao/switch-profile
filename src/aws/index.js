@@ -337,6 +337,26 @@ const getCredentials = (profile, ssoUrl) => catchErrors((async () => {
 				throw wrapErrors(errMsg, ssoCredsErrors)
 		}
 
+		if (!ssoCreds) {
+			try {
+				const data = await exec(`aws configure export-credentials --profile ${profile} --format process`)
+				const parsed = JSON.parse(data)
+				if (parsed.AccessKeyId && parsed.SecretAccessKey) {
+					ssoCreds = {
+						aws_access_key_id: parsed.AccessKeyId,
+						aws_secret_access_key: parsed.SecretAccessKey,
+						aws_session_token: parsed.SessionToken,
+						expiry_date: parsed.Expiration ? new Date(parsed.Expiration) : null
+					}
+				}
+			} catch(e) {
+				// Fallback also failed
+			}
+		}
+
+		if (!ssoCreds)
+			throw new Error(errMsg)
+
 		return ssoCreds
 	} else {
 		const [errors, credsStr] = await getCredsFile()

@@ -81,8 +81,10 @@ The main credential retrieval function. Behaves differently for SSO vs. standard
 **For SSO profiles** (when `ssoUrl` is provided):
 
 1. Calls `refreshSsoSession()` to ensure a valid SSO session exists.
-2. Calls `getSsoCredentials()` to get temporary AWS credentials.
+2. Calls `getSsoCredentials()` to get temporary AWS credentials via the CLI cache.
 3. If credentials fail with "session associated with this profile has expired", forces a session refresh and retries.
+4. If `getSsoCredentials()` returns `null` (cache-based lookup failed), falls back to `aws configure export-credentials --profile <name> --format process` which directly outputs credentials as JSON.
+5. If both approaches fail, throws an error.
 
 **For standard profiles** (when `ssoUrl` is null):
 
@@ -283,6 +285,19 @@ User selects an SSO profile
             ▼
     Search ~/.aws/cli/cache/*.json
     for matching credentials
+            │
+            ├── Found → return credentials
+            │
+            └── Not found (null)
+                    │
+                    ▼
+            Fallback: aws configure export-credentials
+                      --profile <name> --format process
+            (directly outputs credentials as JSON)
+                    │
+                    ├── Success → return credentials
+                    │
+                    └── Failure → throw error
             │
             ▼
     Return { aws_access_key_id,
