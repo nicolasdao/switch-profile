@@ -107,8 +107,24 @@ const listProfiles = () => catchErrors((async () => {
 			sso_region: getParam(params, 'sso_region'),
 			sso_account_id: getParam(params, 'sso_account_id'),
 			sso_role_name: getParam(params, 'sso_role_name'),
+			sso_session: getParam(params, 'sso_session'),
 			region: getParam(params, 'region'),
 			output: getParam(params, 'output')
+		}
+
+		// Handle newer AWS CLI v2 SSO session format where sso_start_url is in a separate [sso-session] section
+		if (p.sso_session && !p.sso_start_url) {
+			const ssoSessionSection = `[sso-session ${p.sso_session}]`
+			const ssoSessionMatch = configStr.split(ssoSessionSection)
+			if (ssoSessionMatch.length > 1) {
+				const [ssoSessionRest=''] = ssoSessionMatch[1].split('[')
+				const ssoSessionParams = ssoSessionRest.split(EOL)
+				p.sso_start_url = getParam(ssoSessionParams, 'sso_start_url')
+				// If sso_region is not in profile, check the session section
+				if (!p.sso_region) {
+					p.sso_region = getParam(ssoSessionParams, 'sso_region')
+				}
+			}
 		}
 
 		if (p.sso_region)
@@ -116,8 +132,8 @@ const listProfiles = () => catchErrors((async () => {
 
 		p.friendlyName = `${p.name}${p.sso_start_url ? ` (SSO [role:${p.sso_role_name||'unknown'} - account:${p.sso_account_id||'unknown'}])` : ''}`
 
-		return p 
-	}).filter(p => p.name != 'default')
+		return p
+	}).filter(p => p.name != 'default' && !p.name.startsWith('sso-session '))
 })())
 
 /**
@@ -364,6 +380,9 @@ const getCredentials = (profile, ssoUrl) => catchErrors((async () => {
 			throw wrapErrors(errMsg, errors)
 
 		const [, rest] = credsStr.split(`[${profile}]`)
+		if (!rest)
+			throw new Error(`Profile ${profile} not found in ${AWS_CREDS_FILE}. Standard profiles must have credentials defined in this file.`)
+
 		const [config=''] = rest.split('[')
 		const params = config.split(EOL)
 		const creds = {
@@ -372,7 +391,7 @@ const getCredentials = (profile, ssoUrl) => catchErrors((async () => {
 			aws_session_token: getParam(params, 'aws_session_token'),
 			expiry_date: null
 		}
-		
+
 		return creds
 	}
 })())
@@ -439,7 +458,7 @@ const deleteProfileFromConfig = (profile, fileContent) => {
 	fileContent = fileContent || ''
 	const regExp = new RegExp(`\\[(profile\\s){0,1}${profile}\\]((.|\\n|\\r)*?)(\\[|$)`)
 	const profileMatch = (fileContent.match(regExp)||[])[0] || ''
-	
+
 	if (!profileMatch)
 		return fileContent
 
@@ -451,7 +470,7 @@ const deleteProfileFromCreds = (profile, fileContent) => {
 	fileContent = fileContent || ''
 	const regExp = new RegExp(`\\[${profile}\\]((.|\\n|\\r)*?)(\\[|$)`)
 	const profileMatch = (fileContent.match(regExp)||[])[0] || ''
-	
+
 	if (!profileMatch)
 		return fileContent
 
@@ -461,7 +480,7 @@ const deleteProfileFromCreds = (profile, fileContent) => {
 
 const deleteProfiles = profiles => catchErrors((async () => {
 	if (!profiles || !profiles.length)
-		return 
+		return
 
 	const errMsg = 'Fail to delete AWS profiles'
 

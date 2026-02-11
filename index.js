@@ -280,44 +280,45 @@ const switchCmd = async () => {
 				await setProfileToDefault(defaultProfileName, profiles, `AWS profile ${defaultProfileName.bold} successfully refreshed.`)
 			else if (option == 'delete') {
 				const { delProfiles } = await inquirer.prompt([
-					{ 
-						type: 'checkbox', 
-						name: 'delProfiles', 
-						message: 'Select the profiles you which to delete: ',
+					{
+						type: 'checkbox',
+						name: 'delProfiles',
+						message: 'Select the profiles you wish to delete (SPACE to select, ENTER to confirm):',
 						pageSize: 20,
 						choices: profiles.map((p,i) => {
-							return { 
-								name: `${i+1}. ${p.friendlyName}`, 
-								value: p.name
+						return {
+							name: `${i+1}. ${p.friendlyName}`,
+							value: p.name
+						}
+					})
+					}
+				])
+
+					if (!delProfiles.length)
+						return
+
+						const label = delProfiles.length > 1 ? 'profiles' : 'profile'
+						const labelText = delProfiles.length > 1 ? `those ${delProfiles.length} profiles` : 'this profile'
+						const { delConfirm } = await inquirer.prompt([
+							{
+								type: 'confirm',
+								name: 'delConfirm',
+								message: `Are you sure you want to delete ${labelText}? `,
 							}
-						})
-					}
-				])
+						])
 
-				if (!delProfiles.length)
-					return 
+					if (!delConfirm)
+						return
 
-				const label = delProfiles.length > 1 ? 'profiles' : 'profile'
-				const labelText = delProfiles.length > 1 ? `those ${delProfiles.length} profiles` : 'this profile'
-				const { delConfirm } = await inquirer.prompt([
-					{ 
-						type: 'confirm', 
-						name: 'delConfirm', 
-						message: `Are you sure you want to delete ${labelText}? `,
-					}
-				])
+						if (defaultProfileName && delProfiles.some(p => p == defaultProfileName)) {
+							return printAWSerrors([new Error(`Fail to delete ${label}. Profile ${defaultProfileName.bold} is the current default. Set another profile as the default, then try deleting again.`)], { noStack:true })
+						}
 
-				if (!delConfirm)
-					return 
+						const [delErrors] = await deleteProfiles(delProfiles)
+						if (delErrors)
+							return printAWSerrors([new Error(`Fail to delete ${label}`), ...delErrors])
 
-				if (defaultProfileName && delProfiles.some(p => p == defaultProfileName))
-					return printAWSerrors([new Error(`Fail to delete ${label}. Profile ${defaultProfileName.bold} is the current default. Set another profile as the default, then try deleting again.`)], { noStack:true })
-
-				const [delErrors] = await deleteProfiles(delProfiles)
-				if (delErrors)
-					return printAWSerrors([new Error(`Fail to delete ${label}`), ...delErrors])
-
-				console.log(`AWS profile${delProfiles.length > 1 ? 's' : ''} successfully deleted.`.green)
+						console.log(`AWS profile${delProfiles.length > 1 ? 's' : ''} successfully deleted.`.green)
 			} else if (option == 'new')
 				await createNewProfile(profiles)
 			else if (option == ABORT_KEY)

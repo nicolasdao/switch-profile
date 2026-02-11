@@ -42,7 +42,8 @@ Each profile object contains:
     sso_start_url: 'https://my.awsapps.com/start',  // null if not SSO
     sso_region: 'us-east-1',                  // null if not SSO
     sso_account_id: '123456789012',           // null if not SSO
-    sso_role_name: 'Admin'                    // null if not SSO
+    sso_role_name: 'Admin',                   // null if not SSO
+    sso_session: 'my-session'                 // null if not using SSO sessions (legacy SSO format)
 }
 ```
 
@@ -51,8 +52,9 @@ Each profile object contains:
 2. For each section, extracts the content between it and the next `[` bracket.
 3. Splits content by newline and extracts key-value pairs using `getParam()`.
 4. Strips `[profile ...]` prefix to get the profile name.
-5. For SSO profiles, uses `sso_region` as the effective region.
-6. Builds a `friendlyName` that includes role and account info for SSO profiles.
+5. For newer SSO profiles using `sso_session`, looks up the `[sso-session name]` section to retrieve `sso_start_url` and `sso_region`.
+6. For SSO profiles, uses `sso_region` as the effective region.
+7. Builds a `friendlyName` that includes role and account info for SSO profiles.
 
 #### `getDefaultProfile()`
 
