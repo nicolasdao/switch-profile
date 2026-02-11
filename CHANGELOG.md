@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.2.3](https://github.com/nicolasdao/switch-profile/compare/v0.2.2...v0.2.3) (2026-02-11)
+
+
+### Bug Fixes
+
+* Add support for AWS CLI v2 SSO session format and improve profile deletion UX ([4eb7366](https://github.com/nicolasdao/switch-profile/commit/4eb7366d6ed1f50f024128d94da213515a4ff9da))
+
 ### [0.2.2](https://github.com/nicolasdao/switch-profile/compare/v0.2.1...v0.2.2) (2026-02-10)
 
 
