@@ -330,6 +330,26 @@ const switchCmd = async () => {
 	}
 }
 
+const printExportHint = (profileName) => {
+	const lines = [
+		'  To lock this profile to this terminal session, run:  ',
+		'',
+		`    export AWS_PROFILE=${profileName}`,
+		'',
+		'  This prevents other terminals from affecting this one.  '
+	]
+	const width = Math.max(...lines.map(l => l.length))
+	const pad = s => s + ' '.repeat(width - s.length)
+	console.log('')
+	console.log(('┌' + '─'.repeat(width) + '┐').cyan)
+	for (let i = 0; i < lines.length; i++) {
+		const content = '│' + pad(lines[i]) + '│'
+		console.log(i === 2 ? content.cyan.bold : content.cyan)
+	}
+	console.log(('└' + '─'.repeat(width) + '┘').cyan)
+	console.log('')
+}
+
 const setProfileToDefault = async (profileName, profileList, successMsg) => {
 	const profile = profileList.find(p => p.friendlyName == profileName || p.name == profileName)
 
@@ -357,6 +377,7 @@ const setProfileToDefault = async (profileName, profileList, successMsg) => {
 		return printAWSerrors([new Error('Fail to update the default profile'), ...errors])
 
 	console.log((successMsg || `AWS profile ${profile.name.bold} successfully set up as default.`).green)
+	printExportHint(profile.name)
 }
 
 // 1. Creates your first command. This example shows an 'order' command with a required argument

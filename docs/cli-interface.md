@@ -84,7 +84,17 @@ On success:
 
 ```
 AWS profile sso-dev successfully set up as default.   # Green
+
+┌─────────────────────────────────────────────────────────┐
+│  To lock this profile to this terminal session, run:    │  # Cyan
+│                                                         │
+│    export AWS_PROFILE=sso-dev                           │  # Cyan + Bold
+│                                                         │
+│  This prevents other terminals from affecting this one. │
+└─────────────────────────────────────────────────────────┘
 ```
+
+This hint appears after every successful profile switch, refresh, or new profile set as default. Running the displayed `export` command sets the `AWS_PROFILE` environment variable in the current terminal only, enabling per-terminal profile isolation.
 
 ### Step 4b: More Options
 
@@ -236,6 +246,14 @@ Selecting it:
 
 ```
 AWS profile sso-dev successfully refreshed.    # Green
+
+┌─────────────────────────────────────────────────────────┐
+│  To lock this profile to this terminal session, run:    │  # Cyan
+│                                                         │
+│    export AWS_PROFILE=sso-dev                           │  # Cyan + Bold
+│                                                         │
+│  This prevents other terminals from affecting this one. │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Visual Indicators
@@ -247,6 +265,7 @@ AWS profile sso-dev successfully refreshed.    # Green
 | **Cyan** | Informational (current profile, time remaining) |
 | **Yellow** | Warnings (expired, expiring soon) |
 | **Bold** | Profile names in messages |
+| **Cyan + Bold** | Export command hint (the `export AWS_PROFILE=...` line) |
 
 ## Error Display
 

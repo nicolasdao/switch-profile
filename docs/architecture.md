@@ -37,7 +37,8 @@ The main executable file (with `#!/usr/bin/env node` shebang). Registered as the
 | Function | Purpose |
 |----------|---------|
 | `switchCmd()` | Main command handler. Checks AWS CLI, shows current profile status, lists profiles, renders the selection menu. |
-| `setProfileToDefault(name, list, msg)` | Gets credentials for a profile, writes them as the `[default]` profile. Shows a clear error if the profile is not found in the list. |
+| `setProfileToDefault(name, list, msg)` | Gets credentials for a profile, writes them as the `[default]` profile. Shows a clear error if the profile is not found in the list. Displays the `export AWS_PROFILE` hint on success. |
+| `printExportHint(profileName)` | Displays a cyan box with the `export AWS_PROFILE=<name>` command for per-terminal profile isolation. Box width adjusts dynamically to the profile name length. |
 | `createNewProfile(profiles, makeItDefault)` | Walks the user through creating a standard or SSO profile. Displays an SSO Setup Guide before SSO creation and checks for errors before reporting success. |
 | `chooseProfileName(denyList)` | Validates profile name input (lowercase alphanumeric, dashes, underscores, min 2 chars, no duplicates). |
 | `chooseRegions()` | Autocomplete region picker from the 24 supported AWS regions. |
@@ -181,5 +182,16 @@ User runs: npx switch-profile
     │  section to:         │
     │  - ~/.aws/credentials│
     │  - ~/.aws/config     │
+    └──────────────────────┘
+               │
+               ▼
+    ┌──────────────────────┐
+    │  printExportHint     │
+    │                      │
+    │  Shows:              │
+    │  export AWS_PROFILE= │
+    │  <name>              │
+    │  for per-terminal    │
+    │  isolation           │
     └──────────────────────┘
 ```

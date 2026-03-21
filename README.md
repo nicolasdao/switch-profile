@@ -52,6 +52,7 @@ This will:
 1. Show your current default profile with its expiry status.
 2. List all available profiles.
 3. Let you pick one to set as the new `default`.
+4. Display an `export AWS_PROFILE=<name>` command you can run to lock that profile to your current terminal session.
 
 For SSO profiles, if the session has expired, it automatically opens your browser for re-authentication.
 
@@ -97,6 +98,11 @@ When you select a profile, `switch-profile`:
 1. Retrieves the credentials for that profile (from cache or via SSO login).
 2. Writes them into the `[default]` section of both files.
 3. Records the profile name and expiry date for status display.
+4. Shows an `export AWS_PROFILE=<name>` command to optionally lock the profile to your terminal session.
+
+### Per-terminal profile isolation
+
+By default, switching profiles updates the global `[default]` section, which affects all terminals. If you need different AWS profiles in different terminals simultaneously, copy and run the `export AWS_PROFILE=<name>` command shown after each switch. This sets an environment variable scoped to that terminal only, so other terminals remain unaffected.
 
 For SSO profiles specifically, it leverages two additional AWS CLI cache directories:
 - `~/.aws/sso/cache/` - SSO session tokens (long-lived, ~24 hours)
@@ -113,6 +119,7 @@ For deeper technical details, see the docs below:
 | [CLI Interface](docs/cli-interface.md) | Detailed walkthrough of every menu, prompt, and user flow |
 | [Configuration Files](docs/configuration-files.md) | Exact formats of all AWS and internal configuration files |
 | [Development Guide](docs/development-guide.md) | How to set up, develop, test, lint, and release |
+| [Gotchas](docs/gotchas.md) | Critical pitfalls — global profile switching, per-terminal isolation limits, and LLM agent constraints |
 
 ## Troubleshooting
 
