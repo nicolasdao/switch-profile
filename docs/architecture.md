@@ -38,7 +38,7 @@ The main executable file (with `#!/usr/bin/env node` shebang). Registered as the
 |----------|---------|
 | `switchCmd()` | Main command handler. Checks AWS CLI, shows current profile status, lists profiles, renders the selection menu. |
 | `setProfileToDefault(name, list, msg)` | Gets credentials for a profile, writes them as the `[default]` profile. Shows a clear error if the profile is not found in the list. Displays the `export AWS_PROFILE` hint on success. |
-| `printExportHint(profileName)` | Displays a cyan box with the `export AWS_PROFILE=<name>` command for per-terminal profile isolation. Box width adjusts dynamically to the profile name length. |
+| `printExportHint(profileName)` | Displays a cyan box with the profile isolation command. On Linux/macOS shows `export AWS_PROFILE=<name>`. On Windows shows both PowerShell (`$env:AWS_PROFILE`) and CMD (`set AWS_PROFILE`) variants. Box width adjusts dynamically. |
 | `createNewProfile(profiles, makeItDefault)` | Walks the user through creating a standard or SSO profile. Displays an SSO Setup Guide before SSO creation and checks for errors before reporting success. |
 | `chooseProfileName(denyList)` | Validates profile name input (lowercase alphanumeric, dashes, underscores, min 2 chars, no duplicates). |
 | `chooseRegions()` | Autocomplete region picker from the 24 supported AWS regions. |
@@ -56,6 +56,8 @@ The core module. Handles all interactions with AWS configuration files and the A
 - Managing SSO sessions and credential caching.
 - Creating, deleting, and listing profiles.
 - Refreshing expired SSO sessions (including browser redirect).
+
+**Windows compatibility:** Uses `IS_WINDOWS` (`process.platform === 'win32'`) to select platform-appropriate line separator for parsing (`LINE_SEP`: regex `/\r?\n/` on Windows, `os.EOL` otherwise), newline character for writing (`NL`: `'\n'` on Windows, `os.EOL` otherwise), and `shell: true` for `spawn` on Windows (required because `aws` is a `.cmd` batch file).
 
 See [AWS Profile Management](aws-profile-management.md) for a detailed breakdown of every function.
 

@@ -6,6 +6,9 @@ const { spawn } = require('child_process')
 const fileHelper = require('../fileHelper')
 const regions = require('./regions')
 
+const IS_WINDOWS = process.platform === 'win32'
+const LINE_SEP = IS_WINDOWS ? /\r?\n/ : EOL
+const NL = IS_WINDOWS ? '\n' : EOL
 const SSO_GET_CREDS_TIMEOUT = 5*60*1000 // 5 minutes to complete the SSO login
 const AWS_CONFIG_FILE = join(homedir(), '.aws', 'config')
 const AWS_CREDS_FILE = join(homedir(), '.aws', 'credentials')
@@ -100,7 +103,7 @@ const listProfiles = () => catchErrors((async () => {
 	return profiles.map(profile => {
 		const [,rest=''] = configStr.split(profile)
 		const [config=''] = rest.split('[')
-		const params = config.split(EOL)
+		const params = config.split(LINE_SEP)
 		const p = {
 			name: profile.replace(/(^\[profile\s+|\[|\])/g, ''),
 			sso_start_url: getParam(params, 'sso_start_url'),
@@ -118,7 +121,7 @@ const listProfiles = () => catchErrors((async () => {
 			const ssoSessionMatch = configStr.split(ssoSessionSection)
 			if (ssoSessionMatch.length > 1) {
 				const [ssoSessionRest=''] = ssoSessionMatch[1].split('[')
-				const ssoSessionParams = ssoSessionRest.split(EOL)
+				const ssoSessionParams = ssoSessionRest.split(LINE_SEP)
 				p.sso_start_url = getParam(ssoSessionParams, 'sso_start_url')
 				// If sso_region is not in profile, check the session section
 				if (!p.sso_region) {
@@ -384,7 +387,7 @@ const getCredentials = (profile, ssoUrl) => catchErrors((async () => {
 			throw new Error(`Profile ${profile} not found in ${AWS_CREDS_FILE}. Standard profiles must have credentials defined in this file.`)
 
 		const [config=''] = rest.split('[')
-		const params = config.split(EOL)
+		const params = config.split(LINE_SEP)
 		const creds = {
 			aws_access_key_id: getParam(params, 'aws_access_key_id'),
 			aws_secret_access_key: getParam(params, 'aws_secret_access_key'),
@@ -404,16 +407,16 @@ const updateDefaultProfile = ({ profile, region, expiry_date, aws_access_key_id,
 	if (credsStrErrors||configStrErrors)
 		throw wrapErrors(errMsg, credsStrErrors||configStrErrors)
 
-	const newDefaultCreds = '[default]'+EOL+
-		`aws_access_key_id = ${aws_access_key_id}`+EOL+
-		`aws_secret_access_key = ${aws_secret_access_key}`+EOL+
-		(aws_session_token ? `aws_session_token = ${aws_session_token}`+EOL : '') +
-		(expiry_date ? `expiry_date = ${expiry_date.toISOString()}`+EOL : '') +
-		`profile = ${profile}`+EOL+EOL
+	const newDefaultCreds = '[default]'+NL+
+		`aws_access_key_id = ${aws_access_key_id}`+NL+
+		`aws_secret_access_key = ${aws_secret_access_key}`+NL+
+		(aws_session_token ? `aws_session_token = ${aws_session_token}`+NL : '') +
+		(expiry_date ? `expiry_date = ${expiry_date.toISOString()}`+NL : '') +
+		`profile = ${profile}`+NL+NL
 
-	const newDefaultConfig = '[default]'+EOL+
-		`region = ${region}`+EOL+
-		'output = json'+EOL+EOL
+	const newDefaultConfig = '[default]'+NL+
+		`region = ${region}`+NL+
+		'output = json'+NL+NL
 
 	const defaultCredsSection = (credsStr.match(/\[default\]((.|\n|\r)*?)(\[|$)/)||[])[0]
 	const defaultConfigSection = (configStr.match(/\[default\]((.|\n|\r)*?)(\[|$)/)||[])[0]
@@ -442,7 +445,7 @@ const getDefaultProfile = () => catchErrors((async () => {
 	if (errors)
 		throw wrapErrors(errMsg, errors)
 
-	const params = ((credsStr.match(/\[default\]((.|\n|\r)*?)(\[|$)/)||[])[0]||'').split(EOL)
+	const params = ((credsStr.match(/\[default\]((.|\n|\r)*?)(\[|$)/)||[])[0]||'').split(LINE_SEP)
 	const creds = {
 		aws_access_key_id: getParam(params, 'aws_access_key_id'),
 		aws_secret_access_key: getParam(params, 'aws_secret_access_key'),
@@ -526,14 +529,14 @@ const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region 
 	if (configStrErrors||credsStrErrors)
 		throw wrapErrors(errMsg, configStrErrors||credsStrErrors)
 
-	const configProfiles = [`[profile ${name}]`+EOL]
-	const credsProfiles = [`[${name}]`+EOL]
+	const configProfiles = [`[profile ${name}]`+NL]
+	const credsProfiles = [`[${name}]`+NL]
 
-	credsProfiles.push(`aws_access_key_id = ${aws_access_key_id}`+EOL)
-	credsProfiles.push(`aws_secret_access_key = ${aws_secret_access_key}`+EOL+EOL)
+	credsProfiles.push(`aws_access_key_id = ${aws_access_key_id}`+NL)
+	credsProfiles.push(`aws_secret_access_key = ${aws_secret_access_key}`+NL+NL)
 
-	configProfiles.push(`region = ${region}`+EOL)
-	configProfiles.push('output = json'+EOL+EOL)
+	configProfiles.push(`region = ${region}`+NL)
+	configProfiles.push('output = json'+NL+NL)
 
 	const newCreds = credsProfiles.join('')
 	const newConfig = configProfiles.join('')
@@ -543,14 +546,14 @@ const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region 
 	if (!credsStr)
 		credsStr = DEFAULT_CREDS
 
-	await fileHelper.write(AWS_CONFIG_FILE, configStr+EOL+newConfig)
-	await fileHelper.write(AWS_CREDS_FILE, credsStr+EOL+newCreds)
+	await fileHelper.write(AWS_CONFIG_FILE, configStr+NL+newConfig)
+	await fileHelper.write(AWS_CREDS_FILE, credsStr+NL+newCreds)
 })())
 
 const createSsoProfile = name => catchErrors((async () => {
 	await awsCliV2Exists()
 	const exitCode = await new Promise(next => {
-		const child = spawn('aws', ['configure', 'sso', '--profile', name],{ stdio: 'inherit' })
+		const child = spawn('aws', ['configure', 'sso', '--profile', name], { stdio: 'inherit', ...(IS_WINDOWS ? { shell: true } : {}) })
 		child.on('exit', code => next(code))
 	})
 	if (exitCode !== 0)

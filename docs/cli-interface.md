@@ -21,7 +21,7 @@ Before anything else, the tool verifies AWS CLI v2+ is installed. If not found, 
 
 - **macOS:** `brew install awscli && brew link --overwrite awscli`
 - **Linux:** curl + unzip instructions for the AWS CLI v2 installer
-- **Windows:** Generic "not installed" message
+- **Windows:** "Not installed" message with a link to the AWS CLI MSI installer download page
 
 ### Step 2: Default Profile Status
 
@@ -82,6 +82,7 @@ Selecting a profile from the list sets it as the `default`. For SSO profiles, th
 
 On success:
 
+**Linux / macOS:**
 ```
 AWS profile sso-dev successfully set up as default.   # Green
 
@@ -94,7 +95,21 @@ AWS profile sso-dev successfully set up as default.   # Green
 └─────────────────────────────────────────────────────────┘
 ```
 
-This hint appears after every successful profile switch, refresh, or new profile set as default. Running the displayed `export` command sets the `AWS_PROFILE` environment variable in the current terminal only, enabling per-terminal profile isolation.
+**Windows:**
+```
+AWS profile sso-dev successfully set up as default.   # Green
+
+┌──────────────────────────────────────────────────────────────┐
+│  To lock this profile to this terminal session, run:         │  # Cyan
+│                                                              │
+│    PowerShell:  $env:AWS_PROFILE = "sso-dev"                 │  # Cyan + Bold
+│    CMD:         set AWS_PROFILE=sso-dev                      │  # Cyan + Bold
+│                                                              │
+│  This prevents other terminals from affecting this one.      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+This hint appears after every successful profile switch, refresh, or new profile set as default. Running the displayed command sets the `AWS_PROFILE` environment variable in the current terminal only, enabling per-terminal profile isolation.
 
 ### Step 4b: More Options
 
@@ -244,6 +259,7 @@ Selecting it:
 2. Retrieves fresh credentials (SSO login if needed).
 3. Updates the `[default]` section.
 
+**Linux / macOS:**
 ```
 AWS profile sso-dev successfully refreshed.    # Green
 
@@ -256,6 +272,8 @@ AWS profile sso-dev successfully refreshed.    # Green
 └─────────────────────────────────────────────────────────┘
 ```
 
+On Windows, the hint shows PowerShell and CMD equivalents instead (see [Step 4a](#step-4a-select-a-profile)).
+
 ## Visual Indicators
 
 | Color | Meaning |
@@ -265,7 +283,7 @@ AWS profile sso-dev successfully refreshed.    # Green
 | **Cyan** | Informational (current profile, time remaining) |
 | **Yellow** | Warnings (expired, expiring soon) |
 | **Bold** | Profile names in messages |
-| **Cyan + Bold** | Export command hint (the `export AWS_PROFILE=...` line) |
+| **Cyan + Bold** | Profile isolation command hint (`export AWS_PROFILE=...` on Unix, PowerShell/CMD equivalents on Windows) |
 
 ## Error Display
 

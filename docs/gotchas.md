@@ -35,11 +35,15 @@ After every successful switch, `switch-profile` displays a box like:
 └─────────────────────────────────────────────────────────┘
 ```
 
-Running `export AWS_PROFILE=dev` sets an environment variable **scoped to that terminal session only**. The AWS CLI and all AWS SDKs honor `AWS_PROFILE` and will use the named profile directly — bypassing `[default]` entirely. Other terminals remain unaffected.
+Running the displayed command sets an environment variable **scoped to that terminal session only**. The AWS CLI and all AWS SDKs honor `AWS_PROFILE` and will use the named profile directly — bypassing `[default]` entirely. Other terminals remain unaffected.
+
+On **Linux / macOS**: `export AWS_PROFILE=dev`
+On **Windows (PowerShell)**: `$env:AWS_PROFILE = "dev"`
+On **Windows (CMD)**: `set AWS_PROFILE=dev`
 
 ### The limitation: you must copy-paste it yourself
 
-`switch-profile` **cannot** set the environment variable for you. This is a fundamental operating system constraint: a child process (the `npx` command) cannot modify the environment of its parent process (your terminal shell). The `export` command must be run directly in the terminal by the user.
+`switch-profile` **cannot** set the environment variable for you. This is a fundamental operating system constraint: a child process (the `npx` command) cannot modify the environment of its parent process (your terminal shell). The displayed command (`export` on Unix, `$env:` on PowerShell, `set` on CMD) must be run directly in the terminal by the user.
 
 There is no workaround for this within the tool itself. The user must manually copy-paste and run the `export AWS_PROFILE=<name>` command shown after each switch.
 

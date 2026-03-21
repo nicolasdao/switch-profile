@@ -102,7 +102,7 @@ When you select a profile, `switch-profile`:
 
 ### Per-terminal profile isolation
 
-By default, switching profiles updates the global `[default]` section, which affects all terminals. If you need different AWS profiles in different terminals simultaneously, copy and run the `export AWS_PROFILE=<name>` command shown after each switch. This sets an environment variable scoped to that terminal only, so other terminals remain unaffected.
+By default, switching profiles updates the global `[default]` section, which affects all terminals. If you need different AWS profiles in different terminals simultaneously, copy and run the command shown after each switch (`export AWS_PROFILE=<name>` on Linux/macOS, or the PowerShell/CMD equivalent on Windows). This sets an environment variable scoped to that terminal only, so other terminals remain unaffected.
 
 For SSO profiles specifically, it leverages two additional AWS CLI cache directories:
 - `~/.aws/sso/cache/` - SSO session tokens (long-lived, ~24 hours)

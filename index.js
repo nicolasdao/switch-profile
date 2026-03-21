@@ -6,6 +6,7 @@
 const program = require('commander')
 const inquirer = require('inquirer')
 const { EOL } = require('os')
+const IS_WINDOWS = process.platform === 'win32'
 const { listProfiles, getCredentials, getDefaultProfile, updateDefaultProfile, deleteProfiles, createProfile, regions, createSsoProfile, awsCliV2Exists } = require('./src/aws')
 const { printAWSerrors } = require('./src/core')
 require('colors')
@@ -179,7 +180,8 @@ const switchCmd = async () => {
 			console.log('brew link --overwrite awscli')
 			return 
 		} else if (process.platform == 'win32') {
-			console.log('AWS CLI seems to not be installed.'.red)
+			console.log('AWS CLI seems to not be installed. Download the installer from:\n'.red)
+			console.log('https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html')
 			return
 		} else {
 			console.log('AWS CLI seems to not be installed. Try installing it as follow\n'.red)
@@ -331,7 +333,14 @@ const switchCmd = async () => {
 }
 
 const printExportHint = (profileName) => {
-	const lines = [
+	const lines = IS_WINDOWS ? [
+		'  To lock this profile to this terminal session, run:  ',
+		'',
+		`    PowerShell:  $env:AWS_PROFILE = "${profileName}"`,
+		`    CMD:         set AWS_PROFILE=${profileName}`,
+		'',
+		'  This prevents other terminals from affecting this one.  '
+	] : [
 		'  To lock this profile to this terminal session, run:  ',
 		'',
 		`    export AWS_PROFILE=${profileName}`,
@@ -342,9 +351,11 @@ const printExportHint = (profileName) => {
 	const pad = s => s + ' '.repeat(width - s.length)
 	console.log('')
 	console.log(('┌' + '─'.repeat(width) + '┐').cyan)
+	const boldStart = IS_WINDOWS ? 2 : 2
+	const boldEnd = IS_WINDOWS ? 3 : 2
 	for (let i = 0; i < lines.length; i++) {
 		const content = '│' + pad(lines[i]) + '│'
-		console.log(i === 2 ? content.cyan.bold : content.cyan)
+		console.log(i >= boldStart && i <= boldEnd ? content.cyan.bold : content.cyan)
 	}
 	console.log(('└' + '─'.repeat(width) + '┘').cyan)
 	console.log('')
