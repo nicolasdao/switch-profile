@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.0.0](https://github.com/nicolasdao/switch-profile/compare/v0.2.3...v1.0.0) (2026-03-21)
+
+
+### Features
+
+* Display export AWS_PROFILE hint after profile switch for per-terminal isolation ([7dd09c8](https://github.com/nicolasdao/switch-profile/commit/7dd09c882708fcafd66fefc6139cd97a13d9b2fb))
+
 ### [0.2.3](https://github.com/nicolasdao/switch-profile/compare/v0.2.2...v0.2.3) (2026-02-11)
 
 
