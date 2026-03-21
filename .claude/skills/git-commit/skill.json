@@ -1,0 +1,12 @@
+{
+	"name": "git-commit",
+	"version": "1.0.1",
+	"description": "Commit current session changes with a conventional commit message. Use when the user asks to commit, git commit, save changes, or commit what we've done.",
+	"keywords": [
+		"git",
+		"commit",
+		"conventional-commit",
+		"changelog",
+		"version-control"
+	]
+}

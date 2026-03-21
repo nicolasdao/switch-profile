@@ -1,0 +1,73 @@
+{
+	"lockVersion": 1,
+	"generatedAt": "2026-03-21T07:51:15.981Z",
+	"skills": {
+		"happyskillsai/happyskills": {
+			"version": "1.17.0",
+			"ref": "refs/tags/v1.17.0",
+			"commit": "8024d2ee1efd9f17391ebd701a6e6131eafec14777d550e23d3d3a50b5d11439",
+			"integrity": "sha256-24e69e779a31ade191ae2fb9dec5a90d28fd9d4afcda2851fc048dd03093c6fb",
+			"requested_by": [
+				"__root__"
+			],
+			"dependencies": {}
+		},
+		"nicolasdao/_kit-dev-essentials": {
+			"version": "1.0.0",
+			"ref": "refs/tags/v1.0.0",
+			"commit": "7c793754d999f50dc44e289b6d190e5f9dc2959e132f62c84625897ced7f95f7",
+			"integrity": "sha256-f4fe6b211aa96bbc291c880a4a61682bf5d438a52db0b82e73f42e7126c39e45",
+			"requested_by": [
+				"__root__"
+			],
+			"dependencies": {
+				"nicolasdao/git-commit": "*",
+				"nicolasdao/update-doc": "*",
+				"nicolasdao/init-doc": "*",
+				"nicolasdao/init-context": "*"
+			},
+			"type": "kit"
+		},
+		"nicolasdao/git-commit": {
+			"version": "1.0.1",
+			"ref": "refs/tags/v1.0.1",
+			"commit": "315daee8d9d3ad5e88c42ed35b8e89ccc7ff57bfc28ef0d72ad5122c8e834e19",
+			"integrity": "sha256-d7e5a0e9afe9f2633e4e9ad64d8248fca0ee8e20a44f54586474bbfecc79d7e7",
+			"requested_by": [
+				"nicolasdao/_kit-dev-essentials"
+			],
+			"dependencies": {}
+		},
+		"nicolasdao/update-doc": {
+			"version": "1.0.4",
+			"ref": "refs/tags/v1.0.4",
+			"commit": "6394de7f8b487c16700f84d5235a3dca5746205d2abafbdfad02e59bbd924a60",
+			"integrity": "sha256-e60d3df49530031a5f663aed8a6999fda6b4caab4deba249ec7cfd5ec65f085c",
+			"requested_by": [
+				"nicolasdao/_kit-dev-essentials"
+			],
+			"dependencies": {}
+		},
+		"nicolasdao/init-doc": {
+			"version": "0.1.1",
+			"ref": "refs/tags/v0.1.1",
+			"commit": "9603e12aa7dba8c2d6903f249a60b418f3913c94dddfde266e065d1b9bbd0171",
+			"integrity": "sha256-567e6e55d27b9873bf1664bd7992cc8d3b7045e4d371de136245e5193e04b680",
+			"requested_by": [
+				"nicolasdao/_kit-dev-essentials"
+			],
+			"dependencies": {},
+			"type": "skill"
+		},
+		"nicolasdao/init-context": {
+			"version": "1.0.1",
+			"ref": "refs/tags/v1.0.1",
+			"commit": "a52d089f1c6a102feac17b99e7df72e29899952f393013bd479e3f97cc614f32",
+			"integrity": "sha256-417c5dc3e0b59f785fd8af166bbaa757f4bfac8343d7365708342e84d386bd01",
+			"requested_by": [
+				"nicolasdao/_kit-dev-essentials"
+			],
+			"dependencies": {}
+		}
+	}
+}

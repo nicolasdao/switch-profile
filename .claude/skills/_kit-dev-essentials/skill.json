@@ -1,0 +1,25 @@
+{
+	"name": "_kit-dev-essentials",
+	"version": "1.0.0",
+	"description": "Core developer workflow kit — bootstrap and maintain project docs, load context, and commit with conventional messages.",
+	"keywords": [
+		"kit",
+		"documentation",
+		"docs",
+		"devops",
+		"git",
+		"commit",
+		"context"
+	],
+	"type": "kit",
+	"authors": [
+		"Nicolas Dao (nic@cloudlesslabs.com)"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {
+		"nicolasdao/git-commit": "*",
+		"nicolasdao/update-doc": "*",
+		"nicolasdao/init-doc": "*",
+		"nicolasdao/init-context": "*"
+	}
+}

@@ -1,0 +1,14 @@
+{
+	"name": "init-context",
+	"version": "1.0.1",
+	"description": "Load project context by reading README and recursively following relevant documentation links based on a question or topic",
+	"keywords": [
+		"documentation",
+		"context",
+		"readme"
+	],
+	"authors": [
+		"Nicolas Dao (nic@cloudlesslabs.com)"
+	],
+	"license": "MIT"
+}

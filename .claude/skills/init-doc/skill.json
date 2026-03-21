@@ -1,0 +1,15 @@
+{
+	"name": "init-doc",
+	"version": "0.1.1",
+	"description": "Generate project documentation from source code analysis for projects with missing or legacy docs. Creates a README.md hub and docs/ folder with topic files.",
+	"keywords": [
+		"documentation",
+		"docs",
+		"bootstrap",
+		"readme",
+		"init",
+		"devops"
+	],
+	"type": "skill",
+	"dependencies": {}
+}

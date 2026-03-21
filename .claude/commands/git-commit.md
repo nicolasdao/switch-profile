@@ -1,1 +1,0 @@
-Generate a one line conventional git message then use it to git commit all the current changes.

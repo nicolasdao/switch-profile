@@ -1,5 +1,7 @@
 ---
 description: Load project context by reading README and recursively following relevant documentation links based on a question or topic
+allowed-tools: Read, Glob, Grep
+argument-hint: [question or topic]
 ---
 
 You are being asked to load context about this project to help answer a specific question or explore a particular topic.
@@ -13,7 +15,7 @@ You are being asked to load context about this project to help answer a specific
 
 The user has provided this question or topic:
 ```
-{{ARGS}}
+$ARGUMENTS
 ```
 
 ## Process: Recursive Documentation Discovery
