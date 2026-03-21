@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.1.0](https://github.com/nicolasdao/switch-profile/compare/v1.0.0...v1.1.0) (2026-03-21)
+
+
+### Features
+
+* add Windows compatibility for profile switching, config parsing, and shell hints ([16ce46b](https://github.com/nicolasdao/switch-profile/commit/16ce46bc5cb1d92fc6d882358eaabc718a157f22))
+
 ## [1.0.0](https://github.com/nicolasdao/switch-profile/compare/v0.2.3...v1.0.0) (2026-03-21)
 
 
