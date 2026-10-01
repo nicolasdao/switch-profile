@@ -1,3 +1,13 @@
+---
+description: Build, lint, tests, manual testing and releases.
+tags: [development, testing, release, build]
+source:
+  - package.json
+  - eslint.config.js
+  - test/**
+  - .agents/skills/release-switch-profile/**
+---
+
 # Development Guide
 
 How to set up, run, build, lint, test and release `switch-profile`.
@@ -69,18 +79,19 @@ npm run test:dist   # build, then test/cli.js against dist/cli.js
 | `test/cli.js` | End to end, non-interactive: version/help, switching a keys profile with `--json`, exit 2 when a login is needed, non-interactive device login then fuzzy switch, the `sp` env file handoff, exit 3 on ambiguous/unknown input (and JSON errors), `status --json`, `add --from-sso`, `remove` with and without `--yes`, `logout` |
 | `test/rank.js` | `PROD` detection, order (current, frecency, config order), fuzzy search across fields, `resolveQuery`, `recordUsage` |
 | `test/clipboard.js` | OSC 52 sequence and the tmux passthrough |
-| `test/shell.js` | Block add/update/remove; real `bash`/`zsh` runs: `sp` sets `AWS_PROFILE` and clears `AWS_ACCESS_KEY_ID`/`AWS_DEFAULT_PROFILE`, bash completion of profiles and subcommands, zsh `compdef` registration (and no failure without `compinit`). Skipped when the shell is missing. |
+| `test/shell.js` | Block add/update/remove; real `bash`/`zsh` runs: `sp` sets `AWS_PROFILE` and clears `AWS_ACCESS_KEY_ID`/`AWS_DEFAULT_PROFILE`, bash completion of profiles and subcommands (including several names after `remove`), zsh `compdef` registration (and no failure without `compinit`). Skipped when the shell is missing. |
 | `test/login.js` | Device code over SSH, Linux without a display, explicit modes, no flags before AWS CLI 2.22.0, `parseLoginOutput` |
 | `test/transforms.js` | `[default]` rules, 1.x detection/stripping, legacy SSO upgrade, session names, profile listing and kinds, `populateSsoProfiles` (skip existing, stale and prune, naming and clashes) |
 | `test/ini.js` | `src/ini.js`, including CRLF preservation |
 | `test/migrate.js` | `src/migrate.js` against a temporary `HOME` |
-| `test/index.js` | Placeholder |
+| `test/core.js` | `catchErrors`/`wrapErrors` (error chains flattened outermost first) and `run` (fails on exit code, not on stderr) |
+| `test/ui.js` | `fit`, `ago`, `isInteractive` (never with `--no-input` or in CI), `CliError` hint and exit code |
 
 ### The fake AWS CLI
 
 `test/cli.js` runs the real `index.js` with `spawnSync`, a temporary `HOME` (with its own `~/.aws` and settings file) and `test/fixtures/bin` first in `PATH`. `test/fixtures/bin/aws` is a small Node script that:
 
-- answers `--version` (`aws-cli/2.33.17`), `sts get-caller-identity` (fails for SSO profiles without a cached token), `sso login` (prints device code or browser output, then writes a token to `~/.aws/sso/cache`), `sso logout`, `sso list-accounts`, `sso list-account-roles` and `configure export-credentials`;
+- answers `--version` (`aws-cli/2.33.17`, or `FAKE_AWS_VERSION`; below 2.22 `sso login` prints the old default device-code output), `sts get-caller-identity` (fails for SSO profiles without a cached token), `sso login` (prints device code or browser output, then writes a token to `~/.aws/sso/cache`), `sso logout`, `sso list-accounts`, `sso list-account-roles` and `configure export-credentials`;
 - logs every call to `$HOME/aws-calls.log`;
 - reads `FAKE_LOGIN_DELAY` (ms before the login completes, default 2500) and `FAKE_LOGIN_FAIL` (fail with `invalid_grant`).
 
@@ -110,22 +121,23 @@ Tips:
 
 ## Release
 
-1. Make sure the working tree is clean and on `master`.
-2. Bump the version and changelog:
-   ```shell
-   npm run rls -- major    # 1.1.0 → 2.0.0 (breaking changes)
-   npm run rls -- minor    # new features
-   npm run rls -- patch    # fixes
-   ```
-   `standard-version --release-as <type>` bumps `package.json`, updates `CHANGELOG.md` from conventional commits, commits, and tags (`v2.0.0`).
-3. Publish:
-   ```shell
-   npm run push            # git push --follow-tags origin master && npm publish --access=public
-   ```
-   `prepublishOnly` runs `npm run lint`, `npm test` and `npm run test:dist` (which builds `dist/cli.js`). Any failure stops the publish.
-4. Check the package: `npx switch-profile@latest --version`.
+Releases are run by the project's **`release-switch-profile`** skill (in `.agents/skills/`, linked into `.claude/skills/`). It replaces standard-version: there is no `rls` or `push` npm script any more. Ask Claude Code to "release", or invoke `/release-switch-profile [patch|minor|major|unreleased] ["note"]`.
 
-`npm run v` prints the current version. `npm pack --dry-run` lists what would be published.
+It runs these steps, stopping at the first failure:
+
+1. **Quality gate:** `npm test` and `npx eslint .`.
+2. **Test gaps:** source files changed since the last tag without tests. It writes the missing tests.
+3. **Docs:** runs the `update-doc` skill, unless the docs are already newer than the code.
+4. **Commit:** commits all pending work with the `git-commit` skill. It then requires a clean tree, on `master`, not behind `origin`.
+5. **Bump:** picks the semver bump from the changes, with conventional commits as the main signal. It then runs `npm version <x.y.z> --no-git-tag-version`, which updates `package.json` and `package-lock.json`.
+6. **Changelog:** writes the new `CHANGELOG.md` entry in [Keep a Changelog](https://keepachangelog.com) format. Older standard-version entries are kept as they are.
+7. **Release commit and tag:** `chore(release): switch-profile v<x.y.z>` with an annotated tag `v<x.y.z>`.
+8. **Push:** pushes `master` and the tag.
+9. **Publish:** `npm publish --access=public`. `prepublishOnly` re-runs lint, tests and `test:dist`.
+
+It asks for confirmation before three steps: the release commit, the push, and the publish. `unreleased` only records your changes under `## [Unreleased]` in `CHANGELOG.md`, for the next release to pick up.
+
+To publish by hand, for example after declining the publish step, run `npm publish --access=public` (requires `npm login`). Check the result with `npx switch-profile@latest --version`. `npm run v` prints the current version, and `npm pack --dry-run` lists what would be published.
 
 ## Conventions
 

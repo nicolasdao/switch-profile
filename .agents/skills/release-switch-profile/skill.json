@@ -1,0 +1,31 @@
+{
+	"name": "release-switch-profile",
+	"version": "0.1.0",
+	"description": "Release workflow for the switch-profile npm CLI: tests, lint, test gaps, docs update, commit, semver bump, Keep a Changelog entry, tag, push to master, npm publish. Replaces standard-version.",
+	"type": "skill",
+	"dependencies": {
+		"nicolasdao/git-commit": "^1.1.0",
+		"nicolasdao/update-doc": "^1.9.0"
+	},
+	"systemDependencies": {
+		"git": {
+			"description": "Git, for commits, tags and pushes",
+			"check": "git --version",
+			"install": {
+				"darwin": "xcode-select --install",
+				"linux": "sudo apt-get install -y git",
+				"win32": "winget install --id Git.Git -e --source winget"
+			}
+		},
+		"node": {
+			"description": "Node.js with npm and npx, for tests, lint, version bumps and npm publish",
+			"version": ">=20.12.0",
+			"check": "node --version && npm --version",
+			"install": {
+				"darwin": "brew install node",
+				"linux": "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs",
+				"win32": "winget install --id OpenJS.NodeJS.LTS -e --source winget"
+			}
+		}
+	}
+}

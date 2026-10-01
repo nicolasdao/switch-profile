@@ -31,8 +31,6 @@
     "test": "mocha --exit",
     "test:dist": "npm run build && SWITCH_PROFILE_DIST=1 mocha --exit test/cli.js",
     "prepublishOnly": "npm run lint && npm test && npm run test:dist",
-    "push": "git push --follow-tags origin master && npm publish --access=public",
-    "rls": "standard-version --release-as",
     "v": "node -e \"console.log(require('./package.json').version)\""
   },
   "author": "Nicolas Dao",
@@ -47,7 +45,6 @@
     "fuzzysort": "^3.1.0",
     "globals": "^17.13.0",
     "mocha": "^8.2.1",
-    "standard-version": "^9.3.0",
     "uqr": "^0.1.3"
   },
   "files": [
