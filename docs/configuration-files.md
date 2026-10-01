@@ -246,10 +246,10 @@ zsh version (bash is the same function with a `complete -F` completion):
 sp() {
 	local __sp_file __sp_status
 	__sp_file="$(mktemp "${TMPDIR:-/tmp}/switch-profile.XXXXXX")" || return 1
-	if command -v switch-profile >/dev/null 2>&1; then
-		SWITCH_PROFILE_SHELL=zsh SWITCH_PROFILE_ENV_FILE="$__sp_file" switch-profile "$@"
+	if [ -n "${SWITCH_PROFILE_DEV_BIN:-}" ]; then
+		SWITCH_PROFILE_SHELL=zsh SWITCH_PROFILE_ENV_FILE="$__sp_file" "$SWITCH_PROFILE_DEV_BIN" "$@"
 	else
-		SWITCH_PROFILE_SHELL=zsh SWITCH_PROFILE_ENV_FILE="$__sp_file" npx --yes switch-profile "$@"
+		SWITCH_PROFILE_SHELL=zsh SWITCH_PROFILE_ENV_FILE="$__sp_file" npx --yes switch-profile@latest "$@"
 	fi
 	__sp_status=$?
 	if [ -s "$__sp_file" ]; then
@@ -264,7 +264,7 @@ _switch_profile_complete() {
 	items=(${(f)"$(sed -n 's/^\[profile \(.*\)\]$/\1/p' "${AWS_CONFIG_FILE:-$HOME/.aws/config}" 2>/dev/null)"})
 	if (( CURRENT == 2 )); then
 		compadd -- $items status login logout add remove settings use
-	elif (( CURRENT == 3 )) && [[ $words[2] == (use|login) ]]; then
+	elif [[ $words[2] == (remove|rm) ]] || { (( CURRENT == 3 )) && [[ $words[2] == (use|login) ]] }; then
 		compadd -- $items
 	fi
 }

@@ -173,7 +173,7 @@ A child process cannot change its parent shell's environment, so `sp` is a shell
 
 What `sp` does:
 
-1. Creates a temp file and runs `switch-profile` (or `npx --yes switch-profile` when not installed globally) with `SWITCH_PROFILE_SHELL=<shell>` and `SWITCH_PROFILE_ENV_FILE=<temp file>`.
+1. Creates a temp file and runs `npx --yes switch-profile@latest` with `SWITCH_PROFILE_SHELL=<shell>` and `SWITCH_PROFILE_ENV_FILE=<temp file>`. It always uses npx, even when `switch-profile` is installed globally, so every run gets the latest release. `SWITCH_PROFILE_DEV_BIN`, when set, replaces the npx call with a local build (see the development guide).
 2. If the file is not empty after the run: sets `AWS_PROFILE` to its content and unsets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `AWS_DEFAULT_PROFILE` (`CLEARED_VARS`). Credentials in the environment win over `AWS_PROFILE` in the CLI and boto3, and boto3 reads `AWS_DEFAULT_PROFILE` first. Region variables are not cleared; the CLI only warns about them.
 3. Deletes the file and returns the CLI's exit code.
 

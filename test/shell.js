@@ -55,11 +55,24 @@ describe('shell', () => {
 		execFileSync('zsh', ['-f', '-c', `. "${join(dir, 'rc')}"`], { env:{ PATH:'/usr/bin:/bin', HOME:dir } })
 	}).timeout(15000)
 
+	;(hasShell('bash') ? it : xit)('Should run SWITCH_PROFILE_DEV_BIN instead of npx when set', () => {
+		const dir = fs.mkdtempSync(join(os.tmpdir(), 'sp-test-'))
+		fs.writeFileSync(join(dir, 'local-build'), '#!/bin/sh\nprintf "from-dev-bin" > "$SWITCH_PROFILE_ENV_FILE"\n', { mode:0o755 })
+		fs.writeFileSync(join(dir, 'rc'), shell.buildBlock('bash', '2.0.0') + '\n')
+		const out = execFileSync('bash', ['-c', `. "${join(dir, 'rc')}"; sp; echo "profile=$AWS_PROFILE"`], {
+			env: { PATH:'/usr/bin:/bin', TMPDIR:dir, HOME:dir, SWITCH_PROFILE_DEV_BIN:join(dir, 'local-build') }
+		}).toString()
+		assert.include(out, 'profile=from-dev-bin')
+	}).timeout(15000)
+
 	for (const sh of ['zsh', 'bash']) {
 		(hasShell(sh) ? it : xit)(`Should set AWS_PROFILE in the calling ${sh} shell`, () => {
 			const dir = fs.mkdtempSync(join(os.tmpdir(), 'sp-test-'))
-			// Fake switch-profile: checks it was launched through the function and hands over a profile.
-			fs.writeFileSync(join(dir, 'switch-profile'), '#!/bin/sh\n[ "$SWITCH_PROFILE_SHELL" = "' + sh + '" ] || exit 3\nprintf "client-a" > "$SWITCH_PROFILE_ENV_FILE"\n', { mode:0o755 })
+			// Fake npx: checks the function asks for the latest release, was launched through the function,
+			// and hands over a profile.
+			fs.writeFileSync(join(dir, 'npx'), '#!/bin/sh\n[ "$1 $2" = "--yes switch-profile@latest" ] || exit 4\n[ "$SWITCH_PROFILE_SHELL" = "' + sh + '" ] || exit 3\nprintf "client-a" > "$SWITCH_PROFILE_ENV_FILE"\n', { mode:0o755 })
+			// A global switch-profile must be ignored: npx always wins.
+			fs.writeFileSync(join(dir, 'switch-profile'), '#!/bin/sh\nexit 5\n', { mode:0o755 })
 			fs.writeFileSync(join(dir, 'rc'), shell.buildBlock(sh, '2.0.0') + '\n')
 			const out = execFileSync(sh, ['-c', `. "${join(dir, 'rc')}"; sp; echo "profile=$AWS_PROFILE key=\${AWS_ACCESS_KEY_ID:-none} default=\${AWS_DEFAULT_PROFILE:-none}"`], {
 				env: { PATH:`${dir}:/usr/bin:/bin`, TMPDIR:dir, HOME:dir, AWS_ACCESS_KEY_ID:'AKIASTALE', AWS_DEFAULT_PROFILE:'old' }

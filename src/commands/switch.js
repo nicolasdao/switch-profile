@@ -8,7 +8,6 @@ const settings = require('../settings')
 const shell = require('../shell')
 const rank = require('../rank')
 const ui = require('../ui')
-const { exec } = require('../core')
 const { ask, preflight, loadState, loginKey, describe, loginState } = require('./common')
 const { ssoLogin } = require('./login-flow')
 
@@ -221,9 +220,6 @@ const enableShortcut = async () => {
 	p.log.success(`Added ${ui.accent(shell.FUNCTION_NAME)} to ${installed.files.map(shell.tilde).join(', ')}\n${ui.dim(`Open a new terminal or run: ${installed.reload}`)}`)
 	if (installed.name == 'powershell')
 		p.log.message(ui.dim('If PowerShell refuses to load your profile: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned'))
-	const global = await exec(`${process.platform == 'win32' ? 'where' : 'which'} switch-profile`).then(() => true, () => false)
-	if (!global)
-		p.log.message(ui.dim(`Tip: npm install -g switch-profile makes ${shell.FUNCTION_NAME} start instantly (npx checks the registry on every run).`))
 }
 
 const runAction = async (key, state, opts) => {

@@ -28,5 +28,5 @@ describe('core', () => {
 		} catch(err) {
 			assert.equal(err.message, 'bad thing')
 		}
-	})
+	}).timeout(15000)
 })

@@ -4,7 +4,9 @@
  * A child process (this CLI) cannot change the environment of the shell that launched it. So per-terminal
  * switching relies on a small shell function, 'sp', that switch-profile adds to the user's shell startup
  * file inside a managed block. The function:
- * 	1. Runs switch-profile with SWITCH_PROFILE_SHELL=<shell> and SWITCH_PROFILE_ENV_FILE=<temp file>.
+ * 	1. Runs 'npx --yes switch-profile@latest' (always the latest release, never a stale global install) with
+ * 	   SWITCH_PROFILE_SHELL=<shell> and SWITCH_PROFILE_ENV_FILE=<temp file>. SWITCH_PROFILE_DEV_BIN, when set,
+ * 	   replaces the npx call with a local build (for maintainers and tests).
  * 	2. switch-profile writes the selected profile name into that temp file (and nothing else).
  * 	3. The function reads the file and sets AWS_PROFILE in the current shell.
  *
@@ -33,10 +35,10 @@ const PROFILES_SED = 'sed -n \'s/^\\[profile \\(.*\\)\\]$/\\1/p\''
 const POSIX_FUNCTION = shell => `${FUNCTION_NAME}() {
 	local __sp_file __sp_status
 	__sp_file="$(mktemp "\${TMPDIR:-/tmp}/switch-profile.XXXXXX")" || return 1
-	if command -v switch-profile >/dev/null 2>&1; then
-		SWITCH_PROFILE_SHELL=${shell} SWITCH_PROFILE_ENV_FILE="$__sp_file" switch-profile "$@"
+	if [ -n "\${SWITCH_PROFILE_DEV_BIN:-}" ]; then
+		SWITCH_PROFILE_SHELL=${shell} SWITCH_PROFILE_ENV_FILE="$__sp_file" "$SWITCH_PROFILE_DEV_BIN" "$@"
 	else
-		SWITCH_PROFILE_SHELL=${shell} SWITCH_PROFILE_ENV_FILE="$__sp_file" npx --yes switch-profile "$@"
+		SWITCH_PROFILE_SHELL=${shell} SWITCH_PROFILE_ENV_FILE="$__sp_file" npx --yes switch-profile@latest "$@"
 	fi
 	__sp_status=$?
 	if [ -s "$__sp_file" ]; then
@@ -76,10 +78,10 @@ complete -F _switch_profile_complete ${FUNCTION_NAME} switch-profile`
 
 const FISH_FUNCTION = `function ${FUNCTION_NAME}
 	set -l __sp_file (mktemp)
-	if type -q switch-profile
-		env SWITCH_PROFILE_SHELL=fish SWITCH_PROFILE_ENV_FILE=$__sp_file switch-profile $argv
+	if set -q SWITCH_PROFILE_DEV_BIN
+		env SWITCH_PROFILE_SHELL=fish SWITCH_PROFILE_ENV_FILE=$__sp_file $SWITCH_PROFILE_DEV_BIN $argv
 	else
-		env SWITCH_PROFILE_SHELL=fish SWITCH_PROFILE_ENV_FILE=$__sp_file npx --yes switch-profile $argv
+		env SWITCH_PROFILE_SHELL=fish SWITCH_PROFILE_ENV_FILE=$__sp_file npx --yes switch-profile@latest $argv
 	end
 	set -l __sp_status $status
 	if test -s $__sp_file
@@ -106,7 +108,7 @@ const POWERSHELL_FUNCTION = `function ${FUNCTION_NAME} {
 	$env:SWITCH_PROFILE_SHELL = 'powershell'
 	$env:SWITCH_PROFILE_ENV_FILE = $spFile
 	try {
-		if (Get-Command switch-profile -ErrorAction SilentlyContinue) { switch-profile @Rest } else { npx --yes switch-profile @Rest }
+		if ($env:SWITCH_PROFILE_DEV_BIN) { & $env:SWITCH_PROFILE_DEV_BIN @Rest } else { npx --yes switch-profile@latest @Rest }
 	} finally {
 		Remove-Item Env:\\SWITCH_PROFILE_SHELL -ErrorAction SilentlyContinue
 		Remove-Item Env:\\SWITCH_PROFILE_ENV_FILE -ErrorAction SilentlyContinue

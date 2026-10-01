@@ -16,9 +16,9 @@ Walkthrough of every command and screen. Mocks are approximate: real output uses
 ## Invocation
 
 ```shell
-sp [args]                    # the shortcut: same as switch-profile, and also sets AWS_PROFILE in this terminal
-switch-profile [args]        # global install
-npx switch-profile [args]    # no install (slower: npx checks the registry each run)
+npx switch-profile [args]    # recommended: always the latest release, nothing to install or update
+sp [args]                    # the shortcut: runs npx switch-profile@latest and sets AWS_PROFILE in this terminal
+switch-profile [args]        # optional global install (sp ignores it)
 ```
 
 Commands are defined in `src/cli.js` (commander). `sp` passes its arguments through unchanged.

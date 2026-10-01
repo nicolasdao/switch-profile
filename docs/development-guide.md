@@ -36,7 +36,7 @@ npm run build
 SWITCH_PROFILE_DIST=1 node index.js
 ```
 
-To try `sp` against your checkout, link it globally (`npm link`): `sp` prefers the global `switch-profile` command over `npx`.
+To try `sp` against your checkout, point it at your build: `export SWITCH_PROFILE_DEV_BIN="$PWD/index.js"` (unset it to go back to npx). Without it, `sp` always runs `npx --yes switch-profile@latest`, even when a global install exists.
 
 ## Build
 
