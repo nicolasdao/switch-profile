@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-01
+
+### Added
+- Add a home screen whose action bar (Log in, Add, Remove, Log out, Settings) stays visible below the profile list, however many profiles there are. Press Tab to reach it, ←→ to choose and Enter to open
+
+### Changed
+- Open actions as pages that return to the home screen: Esc goes back from a page, "Done" in Settings returns home, and Esc on the home screen quits
+
 ## [2.0.1] - 2026-10-01
 
 ### Fixed
@@ -157,5 +165,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 * Add support for choosing a default profile ([73d936f](https://github.com/nicolasdao/switch-profile/commit/73d936fa95d5240dbbeb12e3f640e7436f1cc76f))
 
+[2.1.0]: https://github.com/nicolasdao/switch-profile/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/nicolasdao/switch-profile/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/nicolasdao/switch-profile/compare/v1.1.0...v2.0.0
