@@ -1,3 +1,12 @@
+---
+description: Module map, data flow and bundling of the switch-profile CLI.
+tags: [architecture, modules, bundling]
+source:
+  - index.js
+  - src/**
+  - package.json
+---
+
 # Architecture
 
 Project layout, what each module does, and how a run flows through them.

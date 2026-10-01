@@ -1,0 +1,348 @@
+{
+  "diagnostics": {
+    "gotchas": {
+      "dead_hub_links": [],
+      "format": "monolithic",
+      "orphaned_domain_files": [],
+      "oversized_domain_files": []
+    }
+  },
+  "generated_from": "README.md + docs/**/*.md (excl docs/manual/)",
+  "nodes": [
+    {
+      "dangling": false,
+      "description": null,
+      "has_frontmatter": false,
+      "headings": [
+        "switch-profile",
+        "Table of Contents",
+        "Quick start",
+        "Commands",
+        "Working on remote machines (SSH)",
+        "Importing a client's accounts",
+        "Scripts and AI agents",
+        "Settings",
+        "The `sp` shortcut",
+        "Upgrading from 1.x",
+        "Requirements",
+        "Troubleshooting",
+        "`invalid_grant` during an SSO login",
+        "`Error loading SSO Token` or \"session has expired\"",
+        "SSO login hangs on a remote machine",
+        "The code is not in my clipboard over SSH",
+        "`sp: command not found`",
+        "Tab-completion does not work in zsh",
+        "Commands still use the wrong account",
+        "AWS CLI not found",
+        "Documentation",
+        "License"
+      ],
+      "line_count": 247,
+      "links_to": [
+        "docs/architecture.md",
+        "docs/aws-profile-management.md",
+        "docs/cli-interface.md",
+        "docs/configuration-files.md",
+        "docs/development-guide.md",
+        "docs/gotchas.md"
+      ],
+      "over_size": false,
+      "parse_error": null,
+      "path": "README.md",
+      "source": [],
+      "source_unresolved": [],
+      "tags": [],
+      "toc": {
+        "linked": true,
+        "present": true,
+        "stale": false
+      }
+    },
+    {
+      "dangling": false,
+      "description": "Module map, data flow and bundling of the switch-profile CLI.",
+      "has_frontmatter": true,
+      "headings": [
+        "Architecture",
+        "Project structure",
+        "Entry point and bundle",
+        "Modules",
+        "`src/cli.js`",
+        "`src/commands/`",
+        "`src/ui.js`",
+        "`src/rank.js`",
+        "`src/clipboard.js`",
+        "`src/shell.js`",
+        "`src/settings.js`, `src/migrate.js`",
+        "`src/aws/`",
+        "`src/ini.js`, `src/core.js`",
+        "Error handling",
+        "Data flow: `sp acme prod`",
+        "Data flow: `sp add` (import)"
+      ],
+      "line_count": 159,
+      "links_to": [
+        "docs/aws-profile-management.md",
+        "docs/cli-interface.md",
+        "docs/configuration-files.md"
+      ],
+      "over_size": false,
+      "parse_error": null,
+      "path": "docs/architecture.md",
+      "source": [
+        "index.js",
+        "src/**",
+        "package.json"
+      ],
+      "source_unresolved": [],
+      "tags": [
+        "architecture",
+        "modules",
+        "bundling"
+      ],
+      "toc": {
+        "linked": false,
+        "present": false,
+        "stale": false
+      }
+    },
+    {
+      "dangling": false,
+      "description": "Profile kinds, switching, SSO logins, SSO import, migrations and the sp shell function.",
+      "has_frontmatter": true,
+      "headings": [
+        "AWS Profile Management",
+        "Overview",
+        "File locations",
+        "Profiles and kinds",
+        "Switching",
+        "SSO login",
+        "Mode (`src/aws/login.js`)",
+        "The login screen (`src/commands/login-flow.js`)",
+        "Login state (`aws.getSsoLoginStatus(startUrl)`)",
+        "`login` and `logout` commands",
+        "Import from an SSO portal",
+        "Creating single profiles",
+        "Removing profiles",
+        "AWS CLI version",
+        "Migrations (`src/migrate.js`)",
+        "`runMigrations()`",
+        "Legacy SSO upgrade",
+        "Per-terminal switching (`src/shell.js`)",
+        "Profile names"
+      ],
+      "line_count": 198,
+      "links_to": [
+        "docs/configuration-files.md"
+      ],
+      "over_size": false,
+      "parse_error": null,
+      "path": "docs/aws-profile-management.md",
+      "source": [
+        "src/aws/**",
+        "src/migrate.js",
+        "src/shell.js",
+        "src/commands/login-flow.js"
+      ],
+      "source_unresolved": [],
+      "tags": [
+        "aws",
+        "sso",
+        "profiles",
+        "login",
+        "migrations",
+        "shell"
+      ],
+      "toc": {
+        "linked": false,
+        "present": false,
+        "stale": false
+      }
+    },
+    {
+      "dangling": false,
+      "description": "Walkthrough of every command and screen of the CLI.",
+      "has_frontmatter": true,
+      "headings": [
+        "CLI Interface",
+        "Invocation",
+        "Interactive vs non-interactive",
+        "Errors",
+        "Startup (every command)",
+        "The picker (`switch-profile`, no arguments)",
+        "Status header",
+        "Rows",
+        "Search and order",
+        "Actions",
+        "Switching with arguments (`sp acme prod`)",
+        "The switch",
+        "The login screen",
+        "`status`",
+        "`login [profile] [--device|--browser]`",
+        "`logout [--yes]`",
+        "`add`",
+        "Import from an SSO portal",
+        "`remove [profiles...] [--yes]`",
+        "`settings`",
+        "Visual conventions"
+      ],
+      "line_count": 366,
+      "links_to": [],
+      "over_size": false,
+      "parse_error": null,
+      "path": "docs/cli-interface.md",
+      "source": [
+        "src/cli.js",
+        "src/commands/**",
+        "src/ui.js",
+        "src/rank.js",
+        "src/clipboard.js"
+      ],
+      "source_unresolved": [],
+      "tags": [
+        "cli",
+        "ux",
+        "commands"
+      ],
+      "toc": {
+        "linked": false,
+        "present": false,
+        "stale": false
+      }
+    },
+    {
+      "dangling": false,
+      "description": "Exact formats of the AWS files, the settings file and the shell block written by switch-profile.",
+      "has_frontmatter": true,
+      "headings": [
+        "Configuration Files",
+        "Writing rules",
+        "`~/.aws/config`",
+        "Example",
+        "Profile kinds",
+        "SSO fields",
+        "Keys added by `switch-profile`",
+        "How `switch-profile` changes this file",
+        "`~/.aws/credentials`",
+        "Format used by switch-profile 1.x",
+        "`~/.aws/sso/cache/` (read-only)",
+        "`~/.switch-profile/settings.json`",
+        "Format versions",
+        "Shell startup file (managed block)",
+        "Migrations and backups",
+        "1.x `[default]` migration",
+        "Legacy SSO upgrade",
+        "INI helpers (`src/ini.js`)"
+      ],
+      "line_count": 330,
+      "links_to": [],
+      "over_size": false,
+      "parse_error": null,
+      "path": "docs/configuration-files.md",
+      "source": [
+        "src/aws/transforms.js",
+        "src/ini.js",
+        "src/settings.js",
+        "src/shell.js"
+      ],
+      "source_unresolved": [],
+      "tags": [
+        "configuration",
+        "aws-config",
+        "settings",
+        "shell"
+      ],
+      "toc": {
+        "linked": false,
+        "present": false,
+        "stale": false
+      }
+    },
+    {
+      "dangling": false,
+      "description": "Build, lint, tests, manual testing and releases.",
+      "has_frontmatter": true,
+      "headings": [
+        "Development Guide",
+        "Setup",
+        "Running locally",
+        "Build",
+        "Linting",
+        "Tests",
+        "The fake AWS CLI",
+        "Manual testing of interactive screens",
+        "Release",
+        "Conventions"
+      ],
+      "line_count": 151,
+      "links_to": [],
+      "over_size": false,
+      "parse_error": null,
+      "path": "docs/development-guide.md",
+      "source": [
+        "package.json",
+        "eslint.config.js",
+        "test/**",
+        ".agents/skills/release-switch-profile/**"
+      ],
+      "source_unresolved": [],
+      "tags": [
+        "development",
+        "testing",
+        "release",
+        "build"
+      ],
+      "toc": {
+        "linked": false,
+        "present": false,
+        "stale": false
+      }
+    },
+    {
+      "dangling": false,
+      "description": "Non-obvious pitfalls for users and maintainers.",
+      "has_frontmatter": true,
+      "headings": [
+        "Gotchas",
+        "Table of contents",
+        "Profile switching is global by default",
+        "Why the CLI cannot set `AWS_PROFILE`, and how `sp` does",
+        "`sp` does not make `[default]` per-terminal",
+        "Environment variables that override profiles",
+        "LLM agents and automation",
+        "Switching and search",
+        "A fuzzy match switches only when it is unique",
+        "Logins",
+        "Account access manager needs `aws login`, not `aws sso login`",
+        "The clipboard over SSH depends on your terminal",
+        "Log in again after the legacy SSO upgrade",
+        "Shell support",
+        "zsh completion needs `compinit` first",
+        "CMD on Windows is not supported",
+        "PowerShell execution policy",
+        "Upgrades and downgrades",
+        "Running switch-profile 1.x again",
+        "Tools that cannot read SSO profiles",
+        "Maintainer gotchas",
+        "clack's spinner exits the process on Ctrl+C",
+        "clack autocomplete re-filters function options"
+      ],
+      "line_count": 155,
+      "links_to": [],
+      "over_size": false,
+      "parse_error": null,
+      "path": "docs/gotchas.md",
+      "source": [],
+      "source_unresolved": [],
+      "tags": [
+        "gotchas",
+        "pitfalls"
+      ],
+      "toc": {
+        "linked": false,
+        "present": false,
+        "stale": false
+      }
+    }
+  ]
+}

@@ -1,3 +1,8 @@
+---
+description: Non-obvious pitfalls for users and maintainers.
+tags: [gotchas, pitfalls]
+---
+
 # Gotchas
 
 Pitfalls that are not obvious, for users first, then for maintainers.

@@ -1,3 +1,13 @@
+---
+description: Exact formats of the AWS files, the settings file and the shell block written by switch-profile.
+tags: [configuration, aws-config, settings, shell]
+source:
+  - src/aws/transforms.js
+  - src/ini.js
+  - src/settings.js
+  - src/shell.js
+---
+
 # Configuration Files
 
 Exact formats of the files `switch-profile` reads and writes: the AWS files, the SSO token cache, its own settings file, and the block it adds to your shell startup file.

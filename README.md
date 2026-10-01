@@ -23,6 +23,31 @@ Switch between AWS profiles from your terminal. Type a few letters, press enter,
 - **Import a whole portal.** `sp add` creates one profile per account and role of an IAM Identity Center portal.
 - **Script and agent friendly.** Never prompts when there is no terminal, `--json` output, stable exit codes.
 
+## Table of Contents
+
+<!-- BEGIN toc -->
+- [Quick start](#quick-start)
+- [Commands](#commands)
+- [Working on remote machines (SSH)](#working-on-remote-machines-ssh)
+- [Importing a client's accounts](#importing-a-clients-accounts)
+- [Scripts and AI agents](#scripts-and-ai-agents)
+- [Settings](#settings)
+  - [The `sp` shortcut](#the-sp-shortcut)
+- [Upgrading from 1.x](#upgrading-from-1x)
+- [Requirements](#requirements)
+- [Troubleshooting](#troubleshooting)
+  - [`invalid_grant` during an SSO login](#invalid_grant-during-an-sso-login)
+  - [`Error loading SSO Token` or "session has expired"](#error-loading-sso-token-or-session-has-expired)
+  - [SSO login hangs on a remote machine](#sso-login-hangs-on-a-remote-machine)
+  - [The code is not in my clipboard over SSH](#the-code-is-not-in-my-clipboard-over-ssh)
+  - [`sp: command not found`](#sp-command-not-found)
+  - [Tab-completion does not work in zsh](#tab-completion-does-not-work-in-zsh)
+  - [Commands still use the wrong account](#commands-still-use-the-wrong-account)
+  - [AWS CLI not found](#aws-cli-not-found)
+- [Documentation](#documentation)
+- [License](#license)
+<!-- END toc -->
+
 ## Quick start
 
 ```shell
@@ -208,14 +233,14 @@ The completion registers only if `compinit` ran before the `switch-profile` bloc
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Architecture](docs/architecture.md) | Module map, data flow and bundling |
-| [AWS Profile Management](docs/aws-profile-management.md) | Profile kinds, switching, logins, SSO import, migrations and the `sp` function |
-| [CLI Interface](docs/cli-interface.md) | Walkthrough of every command and screen |
-| [Configuration Files](docs/configuration-files.md) | Exact formats of the AWS files, the settings file and the shell block |
-| [Development Guide](docs/development-guide.md) | Build, lint, tests, manual testing and releases |
-| [Gotchas](docs/gotchas.md) | Pitfalls for users and maintainers |
+<!-- BEGIN doc-index -->
+- [Architecture](docs/architecture.md) — Module map, data flow and bundling of the switch-profile CLI.
+- [AWS Profile Management](docs/aws-profile-management.md) — Profile kinds, switching, SSO logins, SSO import, migrations and the sp shell function.
+- [CLI Interface](docs/cli-interface.md) — Walkthrough of every command and screen of the CLI.
+- [Configuration Files](docs/configuration-files.md) — Exact formats of the AWS files, the settings file and the shell block written by switch-profile.
+- [Development Guide](docs/development-guide.md) — Build, lint, tests, manual testing and releases.
+- [Gotchas](docs/gotchas.md) — Non-obvious pitfalls for users and maintainers.
+<!-- END doc-index -->
 
 ## License
 

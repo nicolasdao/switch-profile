@@ -1,3 +1,13 @@
+---
+description: Profile kinds, switching, SSO logins, SSO import, migrations and the sp shell function.
+tags: [aws, sso, profiles, login, migrations, shell]
+source:
+  - src/aws/**
+  - src/migrate.js
+  - src/shell.js
+  - src/commands/login-flow.js
+---
+
 # AWS Profile Management
 
 How `switch-profile` reads profiles, switches, logs in, imports SSO portals, migrates old setups and switches per terminal.
@@ -129,7 +139,7 @@ Used by the picker header and `status`. Reads every `~/.aws/sso/cache/*.json` wi
 
 `aws.getAwsCliVersion()` parses `aws --version`. That starts Python and costs 0.5 to 1 second, so the result is cached in `settings.awsCli` as `{ path, mtimeMs, version }`, keyed by the resolved binary path and its modification time. Upgrading the AWS CLI changes the mtime and invalidates the cache. `awsCliV2Exists()` checks the command exists (`which`/`where`) and that the major version is at least 2.
 
-Version gates: device code flags need 2.22.0; `aws login` and `aws logout --all` need 2.32.0.
+Version gates: device code flags need 2.22.0 (before that, device code is the CLI's only flow: the login screen still shows the code, but there is no auto-fill URL, so the QR code opens the plain verification page); `aws login` and `aws logout --all` need 2.32.0.
 
 ## Migrations (`src/migrate.js`)
 
@@ -169,7 +179,7 @@ What `sp` does:
 
 Tab-completion (same block):
 
-- Candidates: subcommands (`status login logout add remove settings use`) and profile names at the first position; profile names after `use` and `login`.
+- Candidates: subcommands (`status login logout add remove settings use`) and profile names at the first position; profile names after `use` and `login` (one), and after `remove`/`rm` (any number).
 - Profile names are read with `sed` from `${AWS_CONFIG_FILE:-~/.aws/config}` (`[profile <name>]` lines), so completing never starts Node.
 - zsh: `compdef`, only if `compinit` already ran. bash: `complete -F`. fish: `complete -c`. PowerShell: `Register-ArgumentCompleter` on the function's `$Rest` parameter (which collects all arguments).
 

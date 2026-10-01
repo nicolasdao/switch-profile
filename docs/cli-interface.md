@@ -1,3 +1,14 @@
+---
+description: Walkthrough of every command and screen of the CLI.
+tags: [cli, ux, commands]
+source:
+  - src/cli.js
+  - src/commands/**
+  - src/ui.js
+  - src/rank.js
+  - src/clipboard.js
+---
+
 # CLI Interface
 
 Walkthrough of every command and screen. Mocks are approximate: real output uses colors and, on terminals without Unicode (older Windows consoles), ASCII symbols.
@@ -178,7 +189,7 @@ Without arguments, non-interactive runs exit 3: `Which profile? Pass its name.`
 
 `src/commands/login-flow.js` runs `aws sso login` with its output piped, parses the URL and code (`parseLoginOutput`), and presents them.
 
-**Device code** (`auto` over SSH, `--device`, or the setting; passes `--use-device-code --no-browser`, AWS CLI 2.22+):
+**Device code** (`auto` over SSH, `--device`, or the setting; passes `--use-device-code --no-browser`, AWS CLI 2.22+; on older CLIs device code is the default flow and the screen shows the same code, without the auto-fill URL):
 
 ```
 ◇  Approve the login for acme
