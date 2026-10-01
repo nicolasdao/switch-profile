@@ -1,6 +1,14 @@
 # switch-profile
 
-Switch between AWS profiles from your terminal. Type a few letters, press enter, and every AWS tool uses that account. SSO logins work on remote machines too (device code, clipboard over SSH, QR code), and each terminal can stay on its own account.
+<p align="center"><img src="docs/images/hero.webp" width="100%" alt="switch-profile illustration: a girl rides a rope lift up a tower of lit workshops"></p>
+
+**Jump between AWS accounts from your terminal in seconds, the way AWS recommends.**
+
+If you work across many AWS accounts (clients, environments, organizations), you switch accounts dozens of times a day. `switch-profile` turns that into a few keystrokes: type part of a name, account ID or client, press Enter, and every AWS tool in that terminal is on the right account, logged in and verified. It works the same on your laptop and on a remote machine over SSH, and it never asks you to manage access keys.
+
+```shell
+npx switch-profile
+```
 
 ```
 ┌   switch-profile  2.0.0
@@ -15,17 +23,33 @@ Switch between AWS profiles from your terminal. Type a few letters, press enter,
 └
 ```
 
-- **Fast picker.** Fuzzy search across profile name, account id, account name, role, SSO session (client) and region. The profiles you use most come first.
-- **One identity check per switch.** `switch-profile` calls `aws sts get-caller-identity` once, logs in if needed, then makes the profile the default.
-- **Auto-refresh.** It writes the profile's *settings* into `[default]`, never temporary credentials, so the AWS CLI, SDKs and Terraform refresh credentials on their own.
-- **Per-terminal.** With the `sp` shortcut, the current terminal also gets `AWS_PROFILE`, so different terminals can use different accounts. `sp` also adds tab-completion.
-- **Remote-friendly.** Over SSH, logins use a device code: the code is copied to your laptop's clipboard and the URL can be shown as a QR code.
-- **Import a whole portal.** `sp add` creates one profile per account and role of an IAM Identity Center portal.
-- **Script and agent friendly.** Never prompts when there is no terminal, `--json` output, stable exit codes.
+## Why it's great
+
+- **Seconds, not minutes.** Fuzzy search across profile name, account ID, account name, role, client and region, with your most-used accounts first. `sp acme prod` switches without even opening the picker.
+- **Logged in when you need it.** If a session has expired, it logs you in on the spot, then never again until the session ends: credentials refresh on their own in the AWS CLI, SDKs and Terraform.
+- **Every terminal on its own account.** With the `sp` shortcut, each terminal keeps its own `AWS_PROFILE`, plus tab-completion of your profile names.
+- **Made for remote machines.** On a server reached over SSH, the login code lands in your laptop's clipboard, or scan a QR code with your phone.
+- **A whole client in one step.** `sp add` creates a profile for every account and role in an IAM Identity Center portal, and re-syncs it later.
+- **Scripts and AI agents welcome.** It never prompts without a terminal, offers `--json` output and stable exit codes.
+
+## Built on AWS best practices
+
+`switch-profile` does not invent its own security model. It follows what AWS recommends, lets the official AWS CLI do the sensitive work, and adds the guardrails that make switching accounts all day safe.
+
+- **Temporary credentials, not access keys.** AWS recommends that people sign in through an identity provider, such as IAM Identity Center (AWS SSO), and use short-lived credentials instead of long-lived access keys ([IAM best practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html)). `switch-profile` is built around SSO and console sign-in (`aws login`). Access keys still work, but it warns you before creating new ones.
+- **It never copies credentials.** Switching writes only a profile's *settings* into `[default]`. The AWS CLI and SDKs fetch short-lived credentials themselves and refresh them through `[sso-session]` ([AWS CLI SSO guide](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html)). There are no secrets in anything `switch-profile` writes, so nothing to leak and nothing to go stale.
+- **The AWS CLI does the logging in.** Logins run through `aws sso login` and `aws login`: browser sign-in on your machine, device code where there is no browser. `switch-profile` stores no tokens and has no telemetry. Its only network calls are the AWS CLI's own and npx fetching the package.
+- **Device codes, handled carefully.** Device-code approvals are a known phishing route, so they are used only where there is no browser, and the login screen tells you to approve only the exact code it shows.
+- **You always know which account you are in.** Every switch confirms the real identity with `aws sts get-caller-identity`. Production accounts are flagged in red. Environment variables that would silently override your choice (such as `AWS_ACCESS_KEY_ID`) are flagged, and `sp` clears them.
+- **One account per terminal.** `AWS_PROFILE` is scoped to a terminal, so switching in one window cannot move a deploy running in another.
+- **Careful with your files.** Edits to `~/.aws` are atomic, upgrades back up your files first, and the shell setup lives in one clearly marked block that you can remove from Settings at any time.
+- **Always the latest version.** Run through `npx`, every run uses the newest release: nothing to install, nothing to update.
 
 ## Table of Contents
 
 <!-- BEGIN toc -->
+- [Why it's great](#why-its-great)
+- [Built on AWS best practices](#built-on-aws-best-practices)
 - [Quick start](#quick-start)
 - [Commands](#commands)
 - [Working on remote machines (SSH)](#working-on-remote-machines-ssh)
@@ -62,11 +86,7 @@ sp acme-prod       # switch straight to a profile
 sp acme prod       # fuzzy match: switches if exactly one profile matches
 ```
 
-For speed, install it globally. `npx` checks the npm registry on every run, which adds a noticeable delay; `sp` uses the global command when it exists and falls back to `npx` otherwise.
-
-```shell
-npm install -g switch-profile
-```
+**Why npx?** It always runs the latest release, so you never have to update anything. `sp` uses `npx switch-profile@latest` under the hood. The cost is a second or two while npm checks for a newer version, and the tool needs a connection to AWS anyway. A global install (`npm install -g switch-profile`) also works, but then updating is up to you, and `sp` keeps using npx regardless.
 
 No profiles yet? `switch-profile` starts the **Add profiles** flow. To import every account of your company's or client's SSO portal, see [Importing a client's accounts](#importing-a-clients-accounts).
 
