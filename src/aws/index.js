@@ -1,12 +1,12 @@
-const { error: { catchErrors, wrapErrors } } = require('puffy')
 const fs = require('fs')
+const crypto = require('crypto')
 const { homedir, EOL } = require('os')
-const { join } = require('path')
-const { exec, run, isCommandExist } = require('../core')
-const { CLI_VERSION } = require('../settings')
-const fileHelper = require('../fileHelper')
+const { join, dirname, basename } = require('path')
+const { exec, run, isCommandExist, catchErrors, wrapErrors } = require('../core')
+const settings = require('../settings')
+const { CLI_VERSION } = settings
 const transforms = require('./transforms')
-const { loginFlags } = require('./login')
+const { loginFlags, isRemoteSession, atLeast } = require('./login')
 const regions = require('./regions')
 
 const IS_WINDOWS = process.platform === 'win32'
@@ -18,14 +18,24 @@ const AWS_SSO_FOLDER = join(homedir(), '.aws', 'sso', 'cache')
 const awsExists = isCommandExist('aws')
 let _awsCliVersion = null
 
+const whichAws = () => exec(`${process.platform == 'win32' ? 'where' : 'which'} aws`).then(out => (out || '').split(/\r?\n/)[0].trim(), () => null)
+
 /**
- * Returns the AWS CLI version (e.g., '2.33.17').
+ * Returns the AWS CLI version (e.g., '2.33.17'). 'aws --version' starts Python and costs up to a second, so
+ * the result is cached in the settings file, keyed by the binary's path and modification time.
  */
 const getAwsCliVersion = async () => {
 	if (_awsCliVersion)
 		return _awsCliVersion
+	const path = await whichAws()
+	const stat = path ? await fs.promises.stat(fs.realpathSync(path)).catch(() => null) : null
+	const cached = (await settings.read().catch(() => ({}))).awsCli
+	if (stat && cached && cached.path == path && cached.mtimeMs == stat.mtimeMs && cached.version)
+		return (_awsCliVersion = cached.version)
 	const data = await exec('aws --version') || ''
 	_awsCliVersion = ((data.match(/aws-cli\/(\S+)/)||[])[1]) || null
+	if (stat && _awsCliVersion)
+		await settings.update({ awsCli: { path, mtimeMs:stat.mtimeMs, version:_awsCliVersion } }).catch(() => null)
 	return _awsCliVersion
 }
 
@@ -50,14 +60,6 @@ const awsCliV2Exists = noFailIfMissing => catchErrors((async () => {
 	}
 })())
 
-const getParam = (params, paramName) => {
-	if (!params || !params.length || !paramName)
-		return null
-
-	const regexp = new RegExp(`\\s*${paramName}\\s*=\\s*`)
-	return params.filter(p => regexp.test(p)).map(p => p.replace(regexp,'').trim())[0]
-}
-
 const readText = async file => {
 	try {
 		return await fs.promises.readFile(file, 'utf8')
@@ -71,16 +73,26 @@ const readText = async file => {
 const getCredsFile = () => catchErrors(readText(AWS_CREDS_FILE))
 const getConfigFile = () => catchErrors(readText(AWS_CONFIG_FILE))
 
+const fileExists = file => fs.promises.access(file).then(() => true, () => false)
+
 /**
- * Writes an AWS file, creating ~/.aws if needed. New files are created with owner-only permissions. An empty
- * content for a file that does not exist is not written.
+ * Writes an AWS file atomically (temp file + rename, so a crash never leaves a half-written file), creating
+ * ~/.aws if needed. The existing file's permissions are kept; new files are owner-only. An empty content for
+ * a file that does not exist is not written.
  */
 const writeAwsFile = async (file, content) => {
-	const exists = await fileHelper.exists(file)
-	if (!exists && !content)
+	const stat = await fs.promises.stat(file).catch(() => null)
+	if (!stat && !content)
 		return
-	await fs.promises.mkdir(join(homedir(), '.aws'), { recursive:true })
-	await fs.promises.writeFile(file, content, exists ? undefined : { mode:0o600 })
+	await fs.promises.mkdir(dirname(file), { recursive:true })
+	const tmp = join(dirname(file), `.${basename(file)}.${process.pid}.tmp`)
+	await fs.promises.writeFile(tmp, content, { mode: stat ? (stat.mode & 0o777) : 0o600 })
+	try {
+		await fs.promises.rename(tmp, file)
+	} catch(err) {
+		await fs.promises.unlink(tmp).catch(() => null)
+		throw err
+	}
 }
 
 const writeAwsFiles = async ({ config, creds }) => {
@@ -99,7 +111,7 @@ const backupAwsFiles = () => catchErrors((async () => {
 	const stamp = new Date().toISOString().replace(/\.\d+Z$/, 'Z').replace(/:/g, '-')
 	const backups = []
 	for (const file of [AWS_CONFIG_FILE, AWS_CREDS_FILE]) {
-		if (await fileHelper.exists(file)) {
+		if (await fileExists(file)) {
 			const backup = `${file}.bak-${stamp}`
 			await fs.promises.copyFile(file, backup)
 			backups.push(backup)
@@ -113,7 +125,6 @@ const backupAwsFiles = () => catchErrors((async () => {
  *
  * @return {[Error]}
  * @return {String}		profiles[].name				e.g., 'hello'
- * @return {String}		profiles[].friendlyName		e.g., 'hello (SSO [role:"god"  account:1234])'
  * @return {String}		profiles[].region			e.g., 'us-west-1'
  * @return {String}		profiles[].sso_start_url	e.g., 'https://cloudless.awsapps.com/start'
  * @return {String}		profiles[].sso_region		e.g., 'us-west-1'
@@ -153,10 +164,10 @@ const getSsoLoginStatus = ssoUrl => catchErrors((async () => {
 	const files = await fs.promises.readdir(AWS_SSO_FOLDER).catch(() => [])
 	const tokens = []
 	for (const f of files.filter(f => f.endsWith('.json'))) {
-		const token = await fileHelper.json.get(join(AWS_SSO_FOLDER, f)).catch(() => null)
+		const token = await fs.promises.readFile(join(AWS_SSO_FOLDER, f), 'utf8').then(JSON.parse).catch(() => null)
 		if (!token || !token.startUrl || !token.accessToken)
 			continue
-		let host = null
+		let host
 		try { host = new URL(token.startUrl).host } catch { continue }
 		if (host == ssoHost)
 			tokens.push(token)
@@ -176,60 +187,72 @@ const getSsoLoginStatus = ssoUrl => catchErrors((async () => {
 	return { state: latest.getTime() - 2*60*1000 > now ? 'active' : 'expired', expiresAt:latest }
 })())
 
-const exportCredentials = async profile => {
-	const data = await run('aws', ['configure', 'export-credentials', '--profile', profile, '--format', 'process'])
-	const parsed = JSON.parse(data)
-	if (!parsed.AccessKeyId)
-		throw new Error(`No credentials returned for profile ${profile}`)
-	return parsed
+/**
+ * Checks which identity a profile resolves to.
+ *
+ * @return {Object} { account, arn, roleName }
+ */
+const callerIdentity = async profile => {
+	const data = await run('aws', ['sts', 'get-caller-identity', '--profile', profile, '--output', 'json'])
+	const { Account, Arn } = JSON.parse(data)
+	const roleName = ((Arn || '').match(/:assumed-role\/(?:AWSReservedSSO_)?([^/]+?)(?:_[0-9a-f]{16})?\//) || [])[1]
+		|| ((Arn || '').match(/:user\/(.+)$/) || [])[1] || null
+	return { account:Account, arn:Arn, roleName }
 }
 
 /**
- * Logs in to the profile's SSO session in this terminal (the user sees the URL and, in device code mode,
- * the code to approve).
+ * Arguments for 'aws sso login'.
  *
- * @param  {String} profile
- * @param  {String} loginMode		'auto' | 'device' | 'browser'
+ * @param  {String} target.profile
+ * @param  {String} target.ssoSession
+ * @param  {String} loginMode			'auto' | 'device' | 'browser'
  */
-const ssoLogin = (profile, loginMode) => catchErrors((async () => {
+const ssoLoginArgs = async (target, loginMode) => {
 	const flags = loginFlags(loginMode, { env:process.env, platform:process.platform, cliVersion:await getAwsCliVersion() })
-	await run('aws', ['sso', 'login', '--profile', profile, ...flags], { inherit:true })
-})())
+	const who = target.ssoSession ? ['--sso-session', target.ssoSession] : ['--profile', target.profile]
+	return ['sso', 'login', ...who, ...flags]
+}
 
 /**
- * Makes sure a profile can produce credentials. For SSO profiles, this triggers 'aws sso login' when the
- * session is missing or expired (or always, with 'force'). AWS tools then refresh credentials on their own.
- *
- * @param  {Object}  profile			Item returned by listProfiles
- * @param  {String}  options.loginMode
- * @param  {Boolean} options.force		Logs in again even if the session is valid.
- *
- * @return {[Error]}
- * @return {Date}    expiry_date		When the current role credentials expire (SSO only, informational).
+ * Signs in a console-credentials profile ('aws login', AWS CLI 2.32+) in this terminal.
  */
-const ensureCredentials = (profile, options) => catchErrors((async () => {
-	await awsCliV2Exists()
-	const { loginMode, force } = options || {}
-	if (!profile.isSso)
-		return {}
+const awsLogin = async profile => {
+	const version = await getAwsCliVersion()
+	if (!atLeast(version, [2, 32, 0]))
+		throw new Error(`'aws login' needs AWS CLI 2.32 or later (you have ${version}). Update the AWS CLI and try again.`)
+	const remote = isRemoteSession(process.env, process.platform) ? ['--remote'] : []
+	await run('aws', ['login', '--profile', profile, ...remote], { inherit:true })
+}
 
-	if (!force) {
-		const creds = await exportCredentials(profile.name).catch(() => null)
-		if (creds)
-			return { expiry_date: creds.Expiration ? new Date(creds.Expiration) : null }
-	}
+/**
+ * Logs out of every SSO session on this machine (and console sign-in sessions on AWS CLI 2.32+).
+ */
+const logoutAll = async () => {
+	await run('aws', ['sso', 'logout'])
+	if (atLeast(await getAwsCliVersion(), [2, 32, 0]))
+		await run('aws', ['logout', '--all']).catch(() => null)
+}
 
-	const [loginErrors] = await ssoLogin(profile.name, loginMode)
-	if (loginErrors)
-		throw wrapErrors(`Fail to log in to the SSO session of profile ${profile.name}`, loginErrors)
+/**
+ * Reads the cached SSO access token of an [sso-session] (or of a legacy start URL).
+ */
+const readSsoToken = async ({ ssoSession, startUrl }) => {
+	const key = crypto.createHash('sha1').update(ssoSession || startUrl).digest('hex')
+	const token = await fs.promises.readFile(join(AWS_SSO_FOLDER, `${key}.json`), 'utf8').then(JSON.parse).catch(() => null)
+	if (!token || !token.accessToken || new Date(token.expiresAt).getTime() < Date.now() + 60*1000)
+		return null
+	return token
+}
 
-	try {
-		const creds = await exportCredentials(profile.name)
-		return { expiry_date: creds.Expiration ? new Date(creds.Expiration) : null }
-	} catch(err) {
-		throw wrapErrors(`Logged in, but failed to get credentials for profile ${profile.name}`, [err])
-	}
-})())
+const listSsoAccounts = async (accessToken, region) => {
+	const data = await run('aws', ['sso', 'list-accounts', '--access-token', accessToken, '--region', region, '--output', 'json'])
+	return (JSON.parse(data).accountList || []).map(a => ({ accountId:a.accountId, accountName:a.accountName }))
+}
+
+const listSsoRoles = async (accessToken, region, accountId) => {
+	const data = await run('aws', ['sso', 'list-account-roles', '--access-token', accessToken, '--account-id', accountId, '--region', region, '--output', 'json'])
+	return (JSON.parse(data).roleList || []).map(r => r.roleName)
+}
 
 /**
  * Makes 'name' the default profile. See transforms.setDefaultProfile for what is written.
@@ -362,7 +385,7 @@ const createSsoProfile = name => catchErrors((async () => {
 	try {
 		await run('aws', ['configure', 'sso', '--profile', name], { inherit:true })
 	} catch(err) {
-		throw new Error(`'aws configure sso' failed (${err.message}). The SSO profile may not have been created correctly.`)
+		throw new Error(`'aws configure sso' failed (${err.message}). The SSO profile may not have been created correctly.`, { cause:err })
 	}
 
 	const [configStrErrors, configStr] = await getConfigFile()
@@ -380,10 +403,17 @@ const createSsoProfile = name => catchErrors((async () => {
 module.exports = {
 	AWS_CONFIG_FILE,
 	AWS_CREDS_FILE,
+	AWS_SSO_FOLDER,
 	listProfiles,
-	ensureCredentials,
-	ssoLogin,
+	callerIdentity,
+	ssoLoginArgs,
+	awsLogin,
+	logoutAll,
+	readSsoToken,
+	listSsoAccounts,
+	listSsoRoles,
 	getSsoLoginStatus,
+	writeAwsFile,
 	getDefaultProfile,
 	setDefaultProfile,
 	deleteProfiles,
@@ -395,6 +425,5 @@ module.exports = {
 	writeAwsFiles,
 	getAwsCliVersion,
 	regions,
-	awsCliV2Exists,
-	getParam
+	awsCliV2Exists
 }

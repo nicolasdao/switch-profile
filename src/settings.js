@@ -29,7 +29,7 @@ const read = async () => {
 	} catch(err) {
 		if (err.code == 'ENOENT')
 			return {}
-		throw new Error(`Fail to read ${SETTINGS_FILE}: ${err.message}`)
+		throw new Error(`Fail to read ${SETTINGS_FILE}: ${err.message}`, { cause:err })
 	}
 }
 

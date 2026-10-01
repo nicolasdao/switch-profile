@@ -1,119 +1,120 @@
 # Gotchas
 
-Critical pitfalls and edge cases that are not immediately obvious when using `switch-profile`.
+Pitfalls that are not obvious, for users first, then for maintainers.
 
-## Table of Contents
+## Table of contents
 
 - [Profile switching is global by default](#profile-switching-is-global-by-default)
-    - [The problem](#the-problem)
-    - [The solution: `export AWS_PROFILE`](#the-solution-export-aws_profile)
-    - [Why the CLI cannot set it for you, and how `sp` does](#why-the-cli-cannot-set-it-for-you-and-how-sp-does)
+    - [Why the CLI cannot set `AWS_PROFILE`, and how `sp` does](#why-the-cli-cannot-set-aws_profile-and-how-sp-does)
     - [`sp` does not make `[default]` per-terminal](#sp-does-not-make-default-per-terminal)
+    - [Environment variables that override profiles](#environment-variables-that-override-profiles)
     - [LLM agents and automation](#llm-agents-and-automation)
+- [Switching and search](#switching-and-search)
+    - [A fuzzy match switches only when it is unique](#a-fuzzy-match-switches-only-when-it-is-unique)
+- [Logins](#logins)
+    - [Account access manager needs `aws login`, not `aws sso login`](#account-access-manager-needs-aws-login-not-aws-sso-login)
+    - [The clipboard over SSH depends on your terminal](#the-clipboard-over-ssh-depends-on-your-terminal)
+    - [Log in again after the legacy SSO upgrade](#log-in-again-after-the-legacy-sso-upgrade)
 - [Shell support](#shell-support)
+    - [zsh completion needs `compinit` first](#zsh-completion-needs-compinit-first)
     - [CMD on Windows is not supported](#cmd-on-windows-is-not-supported)
     - [PowerShell execution policy](#powershell-execution-policy)
 - [Upgrades and downgrades](#upgrades-and-downgrades)
     - [Running switch-profile 1.x again](#running-switch-profile-1x-again)
-    - [Log in again after the legacy SSO upgrade](#log-in-again-after-the-legacy-sso-upgrade)
 - [Tools that cannot read SSO profiles](#tools-that-cannot-read-sso-profiles)
+- [Maintainer gotchas](#maintainer-gotchas)
+    - [clack's spinner exits the process on Ctrl+C](#clacks-spinner-exits-the-process-on-ctrlc)
+    - [clack autocomplete re-filters function options](#clack-autocomplete-re-filters-function-options)
 
 ## Profile switching is global by default
 
-### The problem
+Switching writes the profile's settings into `[default]` of `~/.aws/config` (and, for access key profiles, its keys into `[default]` of `~/.aws/credentials`). These files are shared by every terminal and process:
 
-When you run `npx switch-profile` and select a profile, the tool writes that profile's settings into the `[default]` section of `~/.aws/config` (and, for standard profiles, its keys into `[default]` of `~/.aws/credentials`). These are **global files** shared by every terminal, every tool, and every process on the machine.
+- If terminal A switches to `dev`, terminal B is on `dev` too.
+- Terraform, CDK or scripts already running against `[default]` follow the switch immediately.
 
-This means:
-- If Terminal A switches to `dev`, Terminal B is now also on `dev`.
-- If Terminal B then switches to `prod`, Terminal A is silently moved to `prod` too.
-- Any concurrent process relying on `[default]` (Terraform, CDK, scripts) is affected immediately.
+`AWS_PROFILE` scopes a profile to one terminal: AWS tools use the named profile and ignore `[default]`.
 
-### The solution: `export AWS_PROFILE`
-
-The AWS CLI and all AWS SDKs honor the `AWS_PROFILE` environment variable and use the named profile directly, bypassing `[default]` entirely. Setting it in a terminal scopes the profile to that terminal session only.
-
-On **Linux / macOS**: `export AWS_PROFILE=dev`
-On **Windows (PowerShell)**: `$env:AWS_PROFILE = "dev"`
-On **Windows (CMD)**: `set AWS_PROFILE=dev`
-
-When `switch-profile` is not launched through `sp`, it displays this command after every successful switch:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  To lock this profile to this terminal session, run:    │
-│                                                         │
-│    export AWS_PROFILE=dev                               │
-│                                                         │
-│  This prevents other terminals from affecting this one. │
-└─────────────────────────────────────────────────────────┘
+```shell
+export AWS_PROFILE=dev          # Linux / macOS
+$env:AWS_PROFILE = "dev"        # PowerShell
+set AWS_PROFILE=dev             # CMD
 ```
 
-### Why the CLI cannot set it for you, and how `sp` does
+### Why the CLI cannot set `AWS_PROFILE`, and how `sp` does
 
-A child process (the `npx switch-profile` command) cannot modify the environment of its parent process (your terminal shell). This is an operating system constraint, so the bare `npx switch-profile` (or global `switch-profile`) command can only *show* the `export` command.
+A child process cannot change its parent shell's environment. `switch-profile` (or `npx switch-profile`) can only *print* the `export` command.
 
-The workaround is the `sp` shell function. Because a shell function runs *inside* your shell, it can set variables there:
+`sp` is a shell function, so it runs inside your shell:
 
-1. `sp` runs `switch-profile` with `SWITCH_PROFILE_SHELL` and `SWITCH_PROFILE_ENV_FILE` (a temp file) set.
-2. After the switch, `switch-profile` writes only the selected profile name into that temp file.
-3. `sp` reads the file, sets `AWS_PROFILE` in the current shell, and deletes the file.
+1. It runs `switch-profile` with `SWITCH_PROFILE_SHELL` and `SWITCH_PROFILE_ENV_FILE` (a temp file) set.
+2. After a switch, `switch-profile` writes only the profile name into that file.
+3. `sp` sets `AWS_PROFILE`, clears the credential variables (below), and deletes the file.
 
-`switch-profile` offers to add `sp` to your shell startup file after your first switch, and you can enable or disable it in **More options** > **Settings**. Terminals that were already open do not have `sp` until you open a new one or reload the startup file (for example `source ~/.zshrc`).
+Terminals opened before `sp` was set up do not have it until you open a new one or reload the startup file.
 
 ### `sp` does not make `[default]` per-terminal
 
-`sp` still updates the global `[default]` like any switch. It only adds `AWS_PROFILE` to the current terminal. So:
-- Terminals where you ran `sp` keep their profile, whatever other terminals do.
-- Terminals where `AWS_PROFILE` is not set, and processes started outside a terminal (IDE plugins, cron jobs, GUI tools), follow the last switch made anywhere.
+`sp` still updates `[default]` like any switch; it adds `AWS_PROFILE` to the current terminal. Terminals without `AWS_PROFILE`, and processes started outside a terminal (IDE plugins, cron, GUI tools), follow the last switch made anywhere. The picker shows `This terminal uses X` when the terminal's `AWS_PROFILE` differs from `[default]`.
 
-`switch-profile` reminds you at startup when the terminal's `AWS_PROFILE` differs from `[default]` ("This terminal uses: ...").
+### Environment variables that override profiles
+
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` win over `AWS_PROFILE` in the AWS CLI and boto3 (the JS SDK ignores them when a profile is set, so tools disagree). boto3 also reads `AWS_DEFAULT_PROFILE` before `AWS_PROFILE`. The picker warns about all four, and **`sp` unsets them** after a switch. Without `sp`, unset them yourself.
+- `AWS_REGION` and `AWS_DEFAULT_REGION` override the profile's region. They are **not cleared** (a region pinned on purpose is legitimate); the switch prints a warning when they differ from the profile's region.
 
 ### LLM agents and automation
 
-When an LLM agent (e.g., a Claude Code skill) uses `switch-profile` via a shell tool, the same constraint applies — but with an additional twist. `sp` does not help here either.
-
-**Environment variables do not persist between shell tool invocations.** Each time an LLM agent runs a Bash command, it spawns a **new shell subprocess**. So even if the agent runs `export AWS_PROFILE=dev` (or `sp`) in one command, that variable is gone in the next command.
-
-**Workaround:** The agent must prefix every AWS command with the profile inline:
+Each shell tool call of an agent runs in a new subprocess, so `export AWS_PROFILE=…` or `sp` in one call is gone in the next.
 
 ```shell
+# Does not work: two separate tool calls
+export AWS_PROFILE=dev
+aws s3 ls                       # uses [default], not dev
+
+# Works: prefix every command
 AWS_PROFILE=dev aws s3 ls
 AWS_PROFILE=dev terraform plan
-AWS_PROFILE=prod aws sts get-caller-identity
 ```
 
-This works reliably and supports concurrent agents using different profiles, since each command carries its own profile context with no shared global state.
+Prefixing also lets concurrent agents use different profiles. For agents: `switch-profile` never prompts without a TTY, `status --json` lists profiles, and exit code 2 means "a human must run `switch-profile login <profile>`". `switch-profile login <profile> --device` also works non-interactively: the URL and code go to stderr.
 
-**What does NOT work for agents:**
+## Switching and search
 
-```shell
-# Command 1 — sets the variable, but only in this subprocess
-export AWS_PROFILE=dev
+### A fuzzy match switches only when it is unique
 
-# Command 2 — this is a NEW subprocess, AWS_PROFILE is not set here
-aws s3 ls   # Uses [default], NOT dev
-```
+`sp acme prod` switches immediately only if the text is an exact profile name or exactly one profile matches. Matching covers names, account ids, account names, roles, SSO sessions and regions, so short words often match several profiles (`sp prod` may match every client's prod). In a terminal the picker then opens pre-filtered; in scripts the command exits 3 and lists candidates. Use `use <exact-name>` in scripts to avoid surprises.
 
-**Chaining commands in a single invocation** also works but is less practical for multi-step workflows:
+## Logins
 
-```shell
-export AWS_PROFILE=dev && aws s3 ls && aws sts get-caller-identity
-```
+### Account access manager needs `aws login`, not `aws sso login`
 
-**Summary for skill/agent authors:** After running `npx switch-profile` to make sure the SSO login is valid, extract the profile name and use `AWS_PROFILE=<name>` as an inline prefix on every subsequent AWS command. If the SSO login expires during a long task, `aws sso login --profile <name>` (with `--use-device-code` on a remote machine) renews it without changing the default profile.
+Accounts assigned to you through the IAM account access manager are not reachable with `aws sso login`. Add those accounts as **Console sign-in** profiles (`sp add` > Console sign-in), which use `aws login` (AWS CLI 2.32+). They have `login_session` in `~/.aws/config` and are logged in with `aws login` (`--remote` over SSH).
+
+### The clipboard over SSH depends on your terminal
+
+Over SSH, the device code is sent to your local clipboard with the OSC 52 escape sequence. Whether it arrives depends on the terminal: iTerm2, Ghostty, kitty, WezTerm and Windows Terminal accept it (iTerm2 may ask for permission first); others may not. Inside tmux, enable `set -g set-clipboard on` (or `set -g allow-passthrough on`; `switch-profile` also sends a passthrough-wrapped copy). `switch-profile` cannot detect whether it worked, so the screen says `sent to your clipboard`, not `copied`.
+
+### Log in again after the legacy SSO upgrade
+
+After legacy SSO profiles are upgraded to `[sso-session]`, the AWS CLI stores the token under the session name instead of the start URL. The old login is not reused, so you log in once per session. The same happens when a new SSO profile is created without a session name and `switch-profile` adds one.
 
 ## Shell support
 
+### zsh completion needs `compinit` first
+
+The block registers completion with `compdef`, which exists only after `compinit` ran. If the `switch-profile` block sits above `compinit` (or above the line that loads oh-my-zsh, prezto, etc.), `sp` works but Tab does not complete. Move the block below it. Loading the block without `compinit` does not cause errors.
+
+Completion reads `[profile name]` lines with `sed`; profiles written as `[name]` in `~/.aws/config` are not completed.
+
 ### CMD on Windows is not supported
 
-`sp` exists for zsh, bash, fish and PowerShell only. In CMD, run the `set AWS_PROFILE=<name>` command shown after each switch.
+`sp` exists for zsh, bash, fish and PowerShell. In CMD, run the `set AWS_PROFILE=<name>` command shown after each switch.
 
-Note that `switch-profile` cannot tell CMD and PowerShell apart (neither sets `SHELL`). On Windows it always targets the PowerShell profile, so enabling per-terminal switching from CMD installs `sp` for PowerShell, not for CMD.
+`switch-profile` cannot tell CMD and PowerShell apart (neither sets `SHELL`). On Windows it always targets the PowerShell profile, so enabling `sp` from CMD installs it for PowerShell.
 
 ### PowerShell execution policy
 
-`sp` is defined in your PowerShell profile script (`$PROFILE.CurrentUserAllHosts`). If the execution policy blocks scripts, PowerShell does not load the profile and `sp` is not found. `switch-profile` prints this fix when it installs `sp`:
+`sp` lives in your PowerShell profile (`$PROFILE.CurrentUserAllHosts`). If the execution policy blocks scripts, the profile does not load and `sp` is not found. Fix:
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -123,21 +124,27 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ### Running switch-profile 1.x again
 
-Version 1.x does not know about the 2.x format. If you run it after upgrading (for example `npx switch-profile@1`), it writes temporary keys plus its custom `profile` and `expiry_date` keys back into `[default]` of `~/.aws/credentials`. Those keys take precedence over the SSO settings in `[default]` of `~/.aws/config`, and they expire after about an hour.
+1.x does not know the 2.x format. Run after an upgrade (e.g. `npx switch-profile@1`), it writes temporary keys plus its `profile` and `expiry_date` keys back into `[default]` of `~/.aws/credentials`. Those keys override the settings in `~/.aws/config` and expire after about an hour.
 
-The next run of 2.x detects the 1.x keys and repairs `[default]` automatically (with backups), using the profile 1.x selected. Until then, tools using `[default]` run on the copied keys. Avoid mixing versions; if you must, run 2.x afterwards.
-
-### Log in again after the legacy SSO upgrade
-
-When legacy SSO profiles are upgraded to the `[sso-session]` format, the AWS CLI stores the SSO token under the session name instead of the start URL. The existing login is not reused, so you log in once per session the next time you use those profiles. The same happens when a new SSO profile is created without a session name and `switch-profile` adds one.
+The next 2.x run repairs `[default]` (with backups), using the profile 1.x selected. Avoid mixing versions; if you must, run 2.x afterwards.
 
 ## Tools that cannot read SSO profiles
 
-Almost every current AWS tool can resolve credentials from an SSO profile in `[default]`. A few cannot, such as the AWS SDK for Java 1.x, or older SDK versions (for example of the Rust SDK) that only understand the legacy SSO format and not `[sso-session]`. For those, add a `credential_process` to the profile they use, so the AWS CLI produces the credentials:
+Almost every current AWS tool resolves credentials from an SSO profile in `[default]`. A few cannot, such as the AWS SDK for Java 1.x or old SDK versions that only understand the legacy SSO format. Give them a `credential_process` profile so the AWS CLI produces the credentials:
 
 ```ini
 [profile legacy-tool]
 credential_process = aws configure export-credentials --profile dev --format process
 ```
 
-The AWS CLI refreshes the credentials as long as the SSO login of `dev` is valid.
+The credentials refresh as long as the SSO login of `dev` is valid.
+
+## Maintainer gotchas
+
+### clack's spinner exits the process on Ctrl+C
+
+`p.spinner()` from `@clack/prompts` listens on stdin and calls `process.exit` on Ctrl+C. The login screen needs stdin for its own keys (`q`, `c`, `o`) and must kill the `aws sso login` child cleanly on Ctrl+C. So `login-flow.js` uses `ui.timerSpinner()`, a minimal spinner that never touches stdin, and handles raw-mode keypresses itself. Do not swap it for clack's spinner, and do not start a clack prompt while raw mode is on.
+
+### clack autocomplete re-filters function options
+
+When `options` is a function, clack's `autocomplete` still filters the returned rows by substring of the typed text. The picker ranks and filters with `fuzzysort` already, so clack's filter would drop fuzzy matches (`acme prod` does not appear as a substring of `acme-prod`). The picker passes `filter: () => true`; keep it whenever options are pre-filtered.

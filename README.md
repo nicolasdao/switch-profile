@@ -1,130 +1,149 @@
 # switch-profile
 
-An interactive CLI tool for switching between AWS profiles directly from your terminal. No more manually editing `~/.aws/config` or juggling environment variables.
+Switch between AWS profiles from your terminal. Type a few letters, press enter, and every AWS tool uses that account. SSO logins work on remote machines too (device code, clipboard over SSH, QR code), and each terminal can stay on its own account.
+
+```
+┌   switch-profile  2.0.0
+│
+│  ● acme-prod · Admin · 111111111111 · ap-southeast-2 · PROD · SSO ✓ auto-refresh · logged in 3h ago
+│
+◆  Switch to · type a name, account, role or client
+│  Search: dev▌
+│  ● acme-dev        Admin     222222222222  ap-southeast-2   (used 2d ago)
+│  ○ globex-dev      ReadOnly  333333333333  us-east-1
+│  ○ initech-dev     Admin     444444444444  eu-west-1
+└
+```
+
+- **Fast picker.** Fuzzy search across profile name, account id, account name, role, SSO session (client) and region. The profiles you use most come first.
+- **One identity check per switch.** `switch-profile` calls `aws sts get-caller-identity` once, logs in if needed, then makes the profile the default.
+- **Auto-refresh.** It writes the profile's *settings* into `[default]`, never temporary credentials, so the AWS CLI, SDKs and Terraform refresh credentials on their own.
+- **Per-terminal.** With the `sp` shortcut, the current terminal also gets `AWS_PROFILE`, so different terminals can use different accounts. `sp` also adds tab-completion.
+- **Remote-friendly.** Over SSH, logins use a device code: the code is copied to your laptop's clipboard and the URL can be shown as a QR code.
+- **Import a whole portal.** `sp add` creates one profile per account and role of an IAM Identity Center portal.
+- **Script and agent friendly.** Never prompts when there is no terminal, `--json` output, stable exit codes.
+
+## Quick start
 
 ```shell
 npx switch-profile
 ```
 
-## Why?
-
-Working with several AWS accounts usually means one of these:
-
-1. **Per-command `--profile` flag** - Every command (and every tool like Terraform or CDK) needs `--profile`. Not always possible or practical.
-2. **Editing `~/.aws/config` by hand** - Copying settings into `[default]` each time you change account.
-3. **Fighting SSO logins** - Remembering which portal to log in to, and finding that `aws sso login` hangs when you are on a remote machine over SSH.
-
-`switch-profile` makes this one command: pick a profile from a list, done.
-
-- **Switch** - The selected profile becomes the `default`, so every AWS tool uses it without a `--profile` flag.
-- **Auto-refresh** - `switch-profile` copies the profile's *settings* into `[default]`, not temporary credentials. The AWS CLI, SDKs and Terraform then get and refresh credentials on their own. With an `[sso-session]` profile, you only log in again when your SSO session ends (8 hours by default).
-- **Per-terminal** - Run `sp` instead of `npx switch-profile` and the profile is applied to the current terminal only (`AWS_PROFILE`), so different terminals can use different accounts at the same time.
-- **Remote machines** - Over SSH, the SSO login automatically uses a device code: you get a URL and a code that you approve from your laptop or phone.
-
-## Prerequisites
-
-- **[AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)** - Version 2 or later is required.
-- **Node.js** - Any recent version that supports `npx`.
-
-> **Important:** Remove these environment variables from your shell if they are set, as they override the default profile and will conflict with `switch-profile`:
-> - `AWS_ACCESS_KEY_ID`
-> - `AWS_SECRET_ACCESS_KEY`
-> - `AWS_SESSION_TOKEN`
-
-## Installation
-
-No installation needed. Run directly with npx:
+On the first switch, `switch-profile` offers to set up the `sp` shortcut (a small function in your shell startup file). Say yes, open a new terminal, and from then on:
 
 ```shell
-npx switch-profile
+sp                 # pick a profile
+sp acme-prod       # switch straight to a profile
+sp acme prod       # fuzzy match: switches if exactly one profile matches
 ```
 
-Or install globally:
+For speed, install it globally. `npx` checks the npm registry on every run, which adds a noticeable delay; `sp` uses the global command when it exists and falls back to `npx` otherwise.
 
 ```shell
 npm install -g switch-profile
-switch-profile
 ```
 
-## Quick Start
+No profiles yet? `switch-profile` starts the **Add profiles** flow. To import every account of your company's or client's SSO portal, see [Importing a client's accounts](#importing-a-clients-accounts).
 
-### Switch between existing profiles
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `switch-profile [profile...]` | Opens the picker. With words: an exact name or a unique fuzzy match switches directly; otherwise the picker opens pre-filtered (or exits 3 when non-interactive). |
+| `use <profile>` | Switches to a profile by its exact name (no fuzzy matching). |
+| `status [--json]` | Shows the default profile, its login state, and what this terminal uses. |
+| `login [profile] [--device\|--browser]` | Starts a fresh login now, even if the session is still valid. Defaults to this terminal's `AWS_PROFILE`, then the default profile. |
+| `logout [--yes]` | Ends every SSO session on this machine (`aws sso logout`, plus `aws logout --all` on AWS CLI 2.32+). |
+| `add` | Adds profiles: import accounts from an SSO portal (recommended), a single SSO profile, a console sign-in profile, or access keys. |
+| `add --from-sso [session]` | Imports or re-syncs every account and role of an `[sso-session]`. Options: `--region`, `--prefix`, `--prune`, `--yes`. |
+| `remove [profiles...] [--yes]` | Removes profiles (alias `rm`). The current default cannot be removed. |
+| `settings` | Per-terminal switching, SSO login mode, legacy SSO upgrade. |
+
+Global options: `--json`, `--no-input` (never prompt), `--debug` (show stack traces), `-v, --version`. In examples, `sp` and `switch-profile` are interchangeable; only `sp` changes the current terminal.
+
+See [CLI Interface](docs/cli-interface.md) for every screen.
+
+## Working on remote machines (SSH)
+
+Since AWS CLI 2.22, `aws sso login` opens a browser on the machine running the CLI. Over SSH there is none, so the login hangs. `switch-profile` detects remote sessions (`SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` set, or Linux without `DISPLAY`/`WAYLAND_DISPLAY`) and uses a device code instead:
+
+```
+◇  Approve the login for acme
+
+   Open  https://device.sso.us-east-1.amazonaws.com/?user_code=WXYZ-ABCD
+   Code  WXYZ-ABCD  📋 sent to your clipboard
+
+   🔒 Only approve if the page shows exactly this code.
+   q QR code · c copy again · ctrl+c cancel
+◒  Waiting for approval 0:12
+```
+
+- **Clipboard over SSH.** The code is sent to your local clipboard with the OSC 52 terminal escape sequence. iTerm2, Ghostty, kitty, WezTerm and Windows Terminal support it; tmux needs `set -g set-clipboard on` (or `allow-passthrough on`). If your terminal ignores it, copy the code by hand.
+- **QR code.** Press `q` to show the URL as a QR code and approve from your phone.
+- **Log in any time.** `sp login` starts a fresh session now, for example before a long task. `--device` and `--browser` override the automatic choice; Settings can make either permanent.
+- **Log out.** `sp logout` ends every SSO session on the machine, so a shared or rented server keeps no AWS access.
+
+How often you log in is set by IAM Identity Center, not by `switch-profile`:
+
+- The **user interactive session** duration decides when you must log in again. The default is 8 hours, up to 90 days. Your administrator sets it once for the whole Identity Center instance (Settings > Authentication).
+- The **permission set** session duration (1 to 12 hours) matters less: role credentials refresh automatically while the SSO session is valid, as long as the profile uses an `[sso-session]` (the format `switch-profile` writes).
+
+## Importing a client's accounts
 
 ```shell
-npx switch-profile
+sp add          # then choose "Accounts from an SSO portal"
 ```
 
-This will:
-1. Show your current default profile and its SSO login status.
-2. List all available profiles.
-3. Let you pick one to set as the new `default` (logging in to SSO first if needed).
-4. Apply the profile to the current terminal if you launched it with `sp`, or show the `export AWS_PROFILE=<name>` command otherwise.
+1. Pick an existing `[sso-session]` or create one: start URL (e.g. `https://acme.awsapps.com/start`), SSO region (where Identity Center lives, not where you deploy), and a short name, usually the client.
+2. Log in if needed.
+3. `switch-profile` lists every account and role you can access, then asks for a default region and a name prefix. Profiles are named `<prefix>-<account-name>-<role>`, for example `acme-prod-workloads-admin`.
+4. A preview shows the new profiles, the ones already set up, and the ones that no longer exist. Confirm to write them.
 
-The first time you switch, `switch-profile` asks **"Enable per-terminal switching?"**. Answer yes to add the `sp` shortcut to your shell startup file. Then open a new terminal and use:
+Run it again later to pick up new accounts. Account/role pairs that already have a profile are never duplicated, whatever its name. Generated profiles that no longer exist can be pruned (after a backup); profiles you wrote by hand are never pruned.
+
+Non-interactive (after `aws sso login --sso-session acme` or `sp login`):
 
 ```shell
-sp
+switch-profile add --from-sso acme --region eu-west-1 --prefix acme --yes --json
 ```
 
-`sp` works exactly like `npx switch-profile`, but also sets `AWS_PROFILE` in the terminal you ran it from. Your answer is remembered; you can change it later in **More options** > **Settings**.
+## Scripts and AI agents
 
-### Create a new profile
+`switch-profile` never prompts when stdin or stdout is not a terminal, when `CI` is set, or with `--no-input`. It fails with a hint and an exit code instead.
+
+| Exit code | Meaning |
+|-----------|---------|
+| 0 | OK |
+| 1 | Error |
+| 2 | Login required (run `switch-profile login <profile>` in a terminal) |
+| 3 | Bad input: unknown or ambiguous profile, missing argument or `--yes` |
+| 130 | Cancelled |
+
+- `--json` prints machine-readable results on stdout. Expected errors are printed as JSON on stderr: `{"error": "...", "hint": "...", "code": 3}`.
+- `switch-profile status --json` lists every profile with its kind, account, role, region and whether it is production.
+- Non-interactive logins still work: `switch-profile login acme-dev --device` prints the AWS CLI's URL and code on stderr and waits for approval.
+- A shell tool's environment does not survive between commands, so `sp` and `export AWS_PROFILE` do not help an agent. Prefix each AWS command instead:
 
 ```shell
-npx switch-profile
-# Select "More options" > "Create profile"
+AWS_PROFILE=acme-dev aws s3 ls
+AWS_PROFILE=acme-dev terraform plan
 ```
 
-You can create:
-- **Standard profiles** - Access key + secret key pair.
-- **SSO profiles** - Launches the interactive `aws configure sso` flow. Give the SSO session a name (and reuse it for every profile of the same portal) so one login covers them all. If you skip it, `switch-profile` adds one for you.
-
-### Delete profiles
+## Settings
 
 ```shell
-npx switch-profile
-# Select "More options" > "Delete profiles"
+sp settings
 ```
 
-Select one or more profiles to remove. The current default profile cannot be deleted (switch to another one first).
+- **Per-terminal switching**: turns the `sp` shortcut (and tab-completion) on or off.
+- **SSO login**: `auto` (device code over SSH, browser otherwise), always device code, or always browser.
+- **Legacy SSO profiles**: upgrades SSO profiles that have no `[sso-session]` (no auto-refresh).
 
-### Log in again
+The tool's own state lives in `~/.switch-profile/settings.json`. See [Configuration Files](docs/configuration-files.md).
 
-```shell
-npx switch-profile
-# Select "More options" > "Log in again (default profile <name>)"
-```
+### The `sp` shortcut
 
-This option only appears when the SSO login of the current default profile has expired or is missing. It runs `aws sso login` for that profile. Switching to an SSO profile also logs in automatically when needed.
-
-## How It Works
-
-`switch-profile` manages two AWS configuration files:
-
-| File | Purpose |
-|------|---------|
-| `~/.aws/config` | Stores profile settings (region, output format, SSO and role settings) |
-| `~/.aws/credentials` | Stores access keys for standard profiles |
-
-When you select a profile, `switch-profile`:
-1. For SSO profiles, checks that the profile can produce credentials (`aws configure export-credentials`). If not, it runs `aws sso login --profile <name>` in your terminal, so you can see the login URL and code.
-2. Copies the profile's settings (for example `sso_session`, `sso_account_id`, `sso_role_name`, `region`, `role_arn`) into `[default]` of `~/.aws/config`, and records which profile it is.
-3. For standard profiles, copies the access keys into `[default]` of `~/.aws/credentials`. For other profiles, removes `[default]` from that file, because static keys there would win over the SSO settings.
-4. Applies the profile to the current terminal (`sp`), or shows the `export AWS_PROFILE=<name>` command.
-
-No temporary credentials are written to disk by `switch-profile`. AWS tools resolve them from `[default]` and refresh them automatically, using the AWS CLI's SSO cache in `~/.aws/sso/cache/`.
-
-See [Configuration Files](docs/configuration-files.md) for the exact formats.
-
-### Per-terminal profile isolation
-
-Switching updates the global `[default]`, which affects every terminal and every tool that does not set a profile. To use different profiles in different terminals at the same time, use `sp`:
-
-- `sp` is a small shell function that `switch-profile` adds to your shell startup file, inside a block marked `# >>> switch-profile ... >>>` / `# <<< switch-profile <<<`. Do not edit that block: `switch-profile` rewrites it when a new version changes it.
-- When you pick a profile through `sp`, the function sets `AWS_PROFILE` in the current terminal. Other terminals are unaffected.
-- `sp` uses the global `switch-profile` command if it is installed, and `npx --yes switch-profile` otherwise.
-
-Supported shells:
+`sp` is a shell function added to your startup file inside a `# >>> switch-profile ... >>>` block. It runs `switch-profile`, then sets `AWS_PROFILE` in the current terminal and clears `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `AWS_DEFAULT_PROFILE`, which would otherwise override the profile. It also completes profile names and subcommands with Tab. Do not edit the block: `switch-profile` rewrites it when a new version changes it.
 
 | Shell | Startup file |
 |-------|--------------|
@@ -133,101 +152,70 @@ Supported shells:
 | fish | `~/.config/fish/config.fish` |
 | PowerShell | `$PROFILE.CurrentUserAllHosts` (for `pwsh` and/or Windows PowerShell) |
 
-CMD on Windows is not supported: run the `set AWS_PROFILE=<name>` command shown after each switch. In PowerShell, if your profile script is blocked, allow local scripts with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
-
-If `sp` is not found right after enabling it, the terminal has not loaded it yet: open a new terminal or run `source ~/.zshrc` (or your shell's equivalent).
-
-## Remote machines (SSH)
-
-Since AWS CLI 2.22.0, `aws sso login` opens a browser on the same machine by default. On a remote machine reached over SSH, there is no browser, so the login hangs. `switch-profile` avoids this by passing `--use-device-code` when it detects a remote session (`SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` is set, or Linux without `DISPLAY`/`WAYLAND_DISPLAY`). The AWS CLI then prints a URL and a code that you approve from any device. Older AWS CLI versions always use the device code, so the flag is never passed to them.
-
-You can force the behavior in **More options** > **Settings** > **Change SSO login mode** (`auto`, `device` or `browser`).
-
-For long-running remote work:
-
-- **Use `[sso-session]` profiles.** They refresh credentials on their own. Legacy SSO profiles (without `sso_session`) need a new login every time the token expires. `switch-profile` offers to upgrade them.
-- **Raise the SSO session duration.** How often you must log in is set by the IAM Identity Center "user interactive session" duration (8 hours by default, up to 90 days), configured by your AWS administrator. The permission set session duration (1 to 12 hours) does not matter much: role credentials are refreshed automatically while the SSO session is valid.
-
-## Settings
-
-```shell
-npx switch-profile
-# Select "More options" > "Settings"
-```
-
-The Settings screen shows:
-- Per-terminal switching: disabled, enabled and active in this terminal, or enabled but not loaded in this terminal.
-- SSO login mode: `auto` (default), `device` or `browser`.
-- Legacy SSO profiles that have no auto-refresh.
-- The settings file (`~/.switch-profile/settings.json`) with its format version and the `switch-profile` version that last wrote it.
-
-From there you can enable or disable per-terminal switching, change the SSO login mode, and upgrade legacy SSO profiles.
-
 ## Upgrading from 1.x
 
-Version 1.x copied temporary credentials into `[default]` of `~/.aws/credentials`, which expired after about an hour. Version 2 upgrades your setup automatically the first time it runs:
+Version 1.x copied temporary credentials into `[default]` of `~/.aws/credentials`, which expired after about an hour. Version 2 upgrades your setup automatically on its first run:
 
-- `~/.aws/config` and `~/.aws/credentials` are backed up next to themselves (for example `~/.aws/config.bak-2026-10-01T10-12-00Z`).
-- `[default]` is rewritten in the new format for the profile you last selected, and the 1.x `profile` and `expiry_date` keys are removed.
-- A short notice lists what changed and where the backups are.
+- `~/.aws/config` and `~/.aws/credentials` are backed up next to themselves (e.g. `~/.aws/config.bak-2026-10-01T10-12-00Z`).
+- `[default]` is rewritten with the settings of the profile you last selected, and the 1.x `profile` and `expiry_date` keys are removed.
+- If some SSO profiles use the legacy format (no `sso_session`), you are asked once whether to upgrade them. Profiles of the same portal share one session, so one login covers them all.
 
-If some SSO profiles use the legacy format (no `sso_session`), you are asked once whether to upgrade them to the `[sso-session]` format. Profiles from the same portal share one session, so one login covers them all. After the upgrade, you log in once per session. If you decline, you can upgrade later in **More options** > **Settings**.
+The old `switch-profile switch` command still works. If you run 1.x again later (e.g. `npx switch-profile@1`), the next 2.x run repairs `[default]` (with backups).
 
-If you run 1.x again later (for example `npx switch-profile@1`), it writes temporary keys back into `[default]`. The next run of version 2 detects this and repairs `[default]` (with backups). See [Gotchas](docs/gotchas.md).
+## Requirements
 
-## Detailed Documentation
+- **Node.js 20.12 or later.** Older versions get a clear message.
+- **[AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).** 2.22 or later is recommended (choice between device code and browser login); console sign-in (`aws login`) needs 2.32+.
+- **macOS and Linux** are first-class (zsh, bash, fish). **Windows PowerShell** is supported. **CMD** is limited: no `sp`, so run the `set AWS_PROFILE=<name>` command shown after each switch.
 
-For deeper technical details, see the docs below:
-
-| Document | Description |
-|----------|-------------|
-| [Architecture](docs/architecture.md) | Project structure, source files, and how the components fit together |
-| [AWS Profile Management](docs/aws-profile-management.md) | How AWS profiles, SSO sessions, migrations and per-terminal switching work internally |
-| [CLI Interface](docs/cli-interface.md) | Detailed walkthrough of every menu, prompt, and user flow |
-| [Configuration Files](docs/configuration-files.md) | Exact formats of all AWS and internal configuration files |
-| [Development Guide](docs/development-guide.md) | How to set up, develop, test, lint, and release |
-| [Gotchas](docs/gotchas.md) | Critical pitfalls: global `[default]`, per-terminal limits, 1.x downgrades, LLM agent constraints |
+The published package has no runtime dependencies: everything is bundled into one file.
 
 ## Troubleshooting
 
-### `invalid_grant: Invalid grant provided`
+### `invalid_grant` during an SSO login
 
-This error occurs during SSO profile creation when the **wrong SSO region** is specified. AWS SSO is region-specific - you must use the region where your SSO instance is configured, not the region you want to deploy resources to.
+The SSO region is wrong. It must be the region of your IAM Identity Center instance, not the region you deploy to. Fix `sso_region` in the `[sso-session]` section of `~/.aws/config` (or remove the portal and add it again).
 
-**Fix:** Delete the profile and recreate it with the correct SSO region.
+### `Error loading SSO Token` or "session has expired"
 
-### `Error loading SSO Token` or `The SSO session associated with this profile has expired`
-
-The SSO login is missing or expired, for example because `~/.aws/sso/cache` was deleted or the SSO session duration has passed.
-
-**Fix:** Log in again. Either switch to the profile again (`switch-profile` logs in when needed), or select **More options** > **Log in again**. You can also run `aws sso login --profile <name>` yourself. There is no need to delete and recreate the profile.
+The SSO login is missing or expired. Run `sp login` (or just switch to the profile again: `switch-profile` logs in when needed). There is no need to recreate the profile.
 
 ### SSO login hangs on a remote machine
 
-The AWS CLI is waiting for a browser on the remote machine. Set **More options** > **Settings** > **Change SSO login mode** to **Always device code**. See [Remote machines (SSH)](#remote-machines-ssh).
+The AWS CLI is waiting for a browser on the remote machine. Run `sp login --device`, or set **Settings > SSO login** to always use a device code.
+
+### The code is not in my clipboard over SSH
+
+Your terminal does not accept OSC 52, or tmux blocks it. In tmux, add `set -g set-clipboard on` to `~/.tmux.conf`. Otherwise copy the code from the screen (press `c` to try again).
 
 ### `sp: command not found`
 
-The current terminal was opened before per-terminal switching was enabled. Open a new terminal or run `source ~/.zshrc` (or your shell's equivalent). Check **More options** > **Settings** to see whether it is enabled.
+The terminal was opened before `sp` was set up. Open a new terminal or run `source ~/.zshrc` (or your shell's equivalent). `sp settings` shows whether it is on.
+
+### Tab-completion does not work in zsh
+
+The completion registers only if `compinit` ran before the `switch-profile` block. Move the block below `compinit` (or below the line that loads oh-my-zsh) in `~/.zshrc`.
+
+### Commands still use the wrong account
+
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in the environment override every profile, and `AWS_REGION` overrides the profile's region. The picker warns about them; switching with `sp` clears the credential variables (not the region).
 
 ### AWS CLI not found
 
-`switch-profile` requires AWS CLI v2. Install it for your platform:
+**macOS:** `brew install awscli`
 
-**macOS:**
-```shell
-brew install awscli
-brew link --overwrite awscli
-```
+**Linux and Windows:** follow the [AWS CLI install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
 
-**Linux:**
-```shell
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
-```
+## Documentation
 
-**Windows:** Download and run the [AWS CLI MSI installer](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | Module map, data flow and bundling |
+| [AWS Profile Management](docs/aws-profile-management.md) | Profile kinds, switching, logins, SSO import, migrations and the `sp` function |
+| [CLI Interface](docs/cli-interface.md) | Walkthrough of every command and screen |
+| [Configuration Files](docs/configuration-files.md) | Exact formats of the AWS files, the settings file and the shell block |
+| [Development Guide](docs/development-guide.md) | Build, lint, tests, manual testing and releases |
+| [Gotchas](docs/gotchas.md) | Pitfalls for users and maintainers |
 
 ## License
 

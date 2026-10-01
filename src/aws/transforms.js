@@ -6,7 +6,12 @@ const ini = require('../ini')
 
 const NAME_KEY = 'switch_profile_name'
 const VERSION_KEY = 'switch_profile_version'
-const OWN_KEYS = [NAME_KEY, VERSION_KEY]
+// Set on profiles generated from an SSO portal (value: the sso-session name), so pruning never touches
+// hand-written profiles.
+const GENERATED_KEY = 'switch_profile_generated'
+// Optional human friendly account name, shown in the picker and searchable.
+const ACCOUNT_NAME_KEY = 'switch_profile_account_name'
+const OWN_KEYS = [NAME_KEY, VERSION_KEY, GENERATED_KEY, ACCOUNT_NAME_KEY]
 // Custom keys written into [default] of ~/.aws/credentials by switch-profile 1.x.
 const LEGACY_CREDS_KEYS = ['profile', 'expiry_date']
 const SSO_SCOPES = 'sso:account:access'
@@ -210,15 +215,118 @@ const listProfiles = configStr => ini.listSections(configStr)
 			sso_session: params.sso_session || null,
 			region: params.region || null,
 			output: params.output || null,
-			version: params[VERSION_KEY] || null
+			version: params[VERSION_KEY] || null,
+			accountName: params[ACCOUNT_NAME_KEY] || null,
+			generated: params[GENERATED_KEY] || null,
+			role_arn: params.role_arn || null,
+			source_profile: params.source_profile || null,
+			login_session: params.login_session || null
 		}
 		p.isSso = !!p.sso_start_url
 		p.isLegacySso = p.isSso && !p.sso_session
-		p.friendlyName = `${p.name}${p.isSso ? ` (SSO [role:${p.sso_role_name||'unknown'} - account:${p.sso_account_id||'unknown'}])` : ''}`
+		p.kind = p.isSso ? 'sso' : p.login_session ? 'login' : p.role_arn ? 'role' : params.credential_process ? 'process' : 'keys'
+		if (!p.sso_account_id && p.role_arn)
+			p.sso_account_id = (p.role_arn.match(/^arn:aws[^:]*:iam::(\d{12}):/) || [])[1] || null
 		return p
 	})
 
+const slug = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+/**
+ * Pure: the profile name generated for an SSO account/role, e.g. 'acme-prod-workloads-admin'.
+ */
+const generatedProfileName = (prefix, accountName, accountId, roleName) =>
+	[slug(prefix), slug(accountName) || accountId, slug(roleName)].filter(Boolean).join('-')
+
+/**
+ * Creates one profile per account/role available in an SSO portal, skipping account/role pairs that already
+ * have a profile (whatever its name), and optionally removing profiles previously generated for this portal
+ * that no longer exist.
+ *
+ * @param  {String}  configStr
+ * @param  {String}  options.ssoSession		Name of the [sso-session] section
+ * @param  {Array}   options.entries		[{ accountId, accountName, roleName }]
+ * @param  {String}  options.region			Default region of the generated profiles
+ * @param  {String}  options.prefix			Name prefix (defaults to the session name)
+ * @param  {Boolean} options.prune			Remove stale generated profiles
+ * @param  {String}  options.version
+ * @return {Object}  { config, added:[names], existing:[names], stale:[names], removed:[names] }
+ */
+const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, prune, version }) => {
+	let config = configStr
+	const profiles = listProfiles(config)
+	const session = ini.getSection(config, `sso-session ${ssoSession}`) || {}
+	const samePortal = p => p.sso_session == ssoSession || (p.sso_start_url && p.sso_start_url == session.sso_start_url)
+	const key = (accountId, roleName) => `${accountId}/${roleName}`
+	const byKey = new Map(profiles.filter(p => p.isSso && samePortal(p)).map(p => [key(p.sso_account_id, p.sso_role_name), p]))
+	const taken = new Set(profiles.map(p => p.name))
+	const wanted = new Set(entries.map(e => key(e.accountId, e.roleName)))
+
+	const added = []
+	const existing = []
+	for (const e of entries) {
+		const found = byKey.get(key(e.accountId, e.roleName))
+		if (found) {
+			existing.push(found.name)
+			continue
+		}
+		const base = generatedProfileName(prefix || ssoSession, e.accountName, e.accountId, e.roleName)
+		let name = base
+		for (let i = 2; taken.has(name); i++)
+			name = `${base}-${i}`
+		taken.add(name)
+		config = ini.setSection(config, `profile ${name}`, [
+			['sso_session', ssoSession],
+			['sso_account_id', e.accountId],
+			['sso_role_name', e.roleName],
+			...(region ? [['region', region]] : []),
+			['output', 'json'],
+			...(e.accountName ? [[ACCOUNT_NAME_KEY, e.accountName]] : []),
+			[GENERATED_KEY, ssoSession],
+			[VERSION_KEY, version]
+		])
+		added.push(name)
+	}
+
+	const stale = profiles.filter(p => p.generated == ssoSession && !wanted.has(key(p.sso_account_id, p.sso_role_name))).map(p => p.name)
+	const removed = []
+	if (prune) {
+		for (const name of stale) {
+			config = ini.removeSection(config, configSectionName(config, name))
+			removed.push(name)
+		}
+	}
+	return { config, added, existing, stale, removed }
+}
+
+/**
+ * Lists the [sso-session] sections.
+ */
+const listSsoSessions = configStr => ini.listSections(configStr)
+	.filter(s => s.startsWith('sso-session '))
+	.map(s => ({ name:s.replace(/^sso-session\s+/, ''), ...ini.getSection(configStr, s) }))
+
+/**
+ * Adds an [sso-session] section (no-op if it already exists).
+ */
+const addSsoSession = (configStr, { name, startUrl, region, version }) => {
+	if (ini.getSection(configStr, `sso-session ${name}`))
+		return configStr
+	return ini.setSection(configStr, `sso-session ${name}`, [
+		['sso_start_url', startUrl],
+		['sso_region', region],
+		['sso_registration_scopes', SSO_SCOPES],
+		[VERSION_KEY, version]
+	])
+}
+
 module.exports = {
+	GENERATED_KEY,
+	ACCOUNT_NAME_KEY,
+	generatedProfileName,
+	populateSsoProfiles,
+	listSsoSessions,
+	addSsoSession,
 	NAME_KEY,
 	VERSION_KEY,
 	configSectionName,

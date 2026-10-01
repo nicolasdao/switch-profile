@@ -1,0 +1,48 @@
+#!/usr/bin/env node
+// Fake AWS CLI for end-to-end tests of switch-profile.
+const fs = require('fs'), path = require('path'), crypto = require('crypto'), os = require('os')
+const args = process.argv.slice(2)
+const home = os.homedir()
+const cacheDir = path.join(home, '.aws', 'sso', 'cache')
+const arg = n => { const i = args.indexOf(n); return i >= 0 ? args[i+1] : null }
+const has = n => args.includes(n)
+const log = fs.appendFileSync.bind(null, path.join(home, 'aws-calls.log'))
+log(args.join(' ') + '\n')
+const config = () => { try { return fs.readFileSync(path.join(home, '.aws', 'config'), 'utf8') } catch { return '' } }
+const section = name => { const m = config().split(/\r?\n/); const out = {}; let on = false
+	for (const l of m) { const h = l.match(/^\[(.+)\]$/); if (h) { on = h[1] == name; continue } if (on) { const kv = l.match(/^(\S+)\s*=\s*(.*)$/); if (kv) out[kv[1]] = kv[2] } } return out }
+const tokenFile = key => path.join(cacheDir, crypto.createHash('sha1').update(key).digest('hex') + '.json')
+const writeToken = (key, startUrl) => { fs.mkdirSync(cacheDir, { recursive:true }); fs.writeFileSync(tokenFile(key), JSON.stringify({ startUrl, region:'us-east-1', accessToken:'tok', expiresAt:new Date(Date.now()+3600e3).toISOString(), refreshToken:'r', registrationExpiresAt:new Date(Date.now()+90*86400e3).toISOString() })) }
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+;(async () => {
+	if (args[0] == '--version') return console.log(`aws-cli/${process.env.FAKE_AWS_VERSION || '2.33.17'} Python/3.13.12 Darwin/25.2.0 source/arm64`)
+	if (args[0] == 'sts' && args[1] == 'get-caller-identity') {
+		const name = arg('--profile'); const p = section(`profile ${name}`)
+		if (p.sso_session || p.sso_start_url) {
+			if (!fs.existsSync(tokenFile(p.sso_session || p.sso_start_url))) { console.error(`\nError loading SSO Token: Token for ${p.sso_session || p.sso_start_url} does not exist`); process.exit(255) }
+			return console.log(JSON.stringify({ UserId:'X', Account:p.sso_account_id, Arn:`arn:aws:sts::${p.sso_account_id}:assumed-role/AWSReservedSSO_${p.sso_role_name}_0123456789abcdef/nic@cloudless` }))
+		}
+		return console.log(JSON.stringify({ UserId:'Y', Account:'999999999999', Arn:'arn:aws:iam::999999999999:user/nic' }))
+	}
+	if (args[0] == 'sso' && args[1] == 'login') {
+		const session = arg('--sso-session') || section(`profile ${arg('--profile')}`).sso_session
+		const s = section(`sso-session ${session}`)
+		if (process.env.FAKE_AWS_VERSION && !has('--use-device-code')) // < 2.22: device code is the default flow
+			process.stdout.write('Attempting to automatically open the SSO authorization page in your default browser.\nIf the browser does not open or you wish to use a different device to authorize this request, open the following URL:\n\nhttps://device.sso.us-east-1.amazonaws.com/\n\nThen enter the code:\n\nLEGA-CYCD\n')
+		else if (has('--use-device-code')) {
+			process.stdout.write('Browser will not be automatically opened.\nPlease visit the following URL:\n\nhttps://device.sso.us-east-1.amazonaws.com/\n')
+			await sleep(200)
+			process.stdout.write('\nThen enter the code:\n\nWXYZ-ABCD\n\nAlternatively, you may visit the following URL which will autofill the code upon loading:\nhttps://device.sso.us-east-1.amazonaws.com/?user_code=WXYZ-ABCD\n')
+		} else
+			process.stdout.write('Attempting to open your default browser.\nIf the browser does not open, open the following URL:\n\nhttps://oidc.us-east-1.amazonaws.com/authorize?response_type=code&client_id=x\n')
+		await sleep(Number(process.env.FAKE_LOGIN_DELAY || 2500))
+		if (process.env.FAKE_LOGIN_FAIL) { console.error('An error occurred (InvalidGrantException) when calling the CreateToken operation: invalid_grant'); process.exit(255) }
+		writeToken(session, s.sso_start_url)
+		return console.log(`Successfully logged into Start URL: ${s.sso_start_url}`)
+	}
+	if (args[0] == 'sso' && args[1] == 'logout') { fs.rmSync(cacheDir, { recursive:true, force:true }); return }
+	if (args[0] == 'sso' && args[1] == 'list-accounts') return console.log(JSON.stringify({ accountList:[{ accountId:'111111111111', accountName:'Prod Workloads' }, { accountId:'222222222222', accountName:'Dev' }, { accountId:'333333333333', accountName:'Security' }] }))
+	if (args[0] == 'sso' && args[1] == 'list-account-roles') { await sleep(150); const id = arg('--account-id'); return console.log(JSON.stringify({ roleList: id == '333333333333' ? [{ roleName:'ReadOnly' }] : [{ roleName:'Admin' }, { roleName:'ReadOnly' }] })) }
+	if (args[0] == 'configure' && args[1] == 'export-credentials') return console.log(JSON.stringify({ Version:1, AccessKeyId:'ASIA', SecretAccessKey:'s', SessionToken:'t' }))
+	console.error('fake aws: unsupported ' + args.join(' ')); process.exit(2)
+})()

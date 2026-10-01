@@ -148,4 +148,46 @@ sso_region = eu-west-1
 	it('Should not list [default] or [sso-session] as profiles', () => {
 		assert.deepEqual(t.listProfiles(LEGACY_CONFIG + '\n[sso-session x]\nsso_start_url = https://x.awsapps.com/start\n').map(p => p.name), ['dev', 'prod', 'other', 'keys'])
 	})
+
+	it('Should tell profile kinds apart', () => {
+		const config = '[profile a]\nsso_session = x\nsso_account_id = 1\nsso_role_name = R\n\n[sso-session x]\nsso_start_url = https://x.awsapps.com/start\n\n[profile b]\nlogin_session = arn:aws:iam::123456789012:user/me\n\n[profile c]\nrole_arn = arn:aws:iam::210987654321:role/Deploy\nsource_profile = a\n\n[profile d]\ncredential_process = x\n\n[profile e]\nregion = us-east-1\n'
+		const kinds = t.listProfiles(config).map(p => [p.name, p.kind])
+		assert.deepEqual(kinds, [['a', 'sso'], ['b', 'login'], ['c', 'role'], ['d', 'process'], ['e', 'keys']])
+		assert.equal(t.listProfiles(config).find(p => p.name == 'c').sso_account_id, '210987654321')
+	})
+
+	it('Should generate one profile per SSO account and role, skipping existing ones', () => {
+		const config = '[sso-session acme]\nsso_start_url = https://acme.awsapps.com/start\nsso_region = us-east-1\n\n[profile my-prod]\nsso_session = acme\nsso_account_id = 111111111111\nsso_role_name = Admin\n'
+		const entries = [
+			{ accountId:'111111111111', accountName:'Prod Workloads', roleName:'Admin' },
+			{ accountId:'111111111111', accountName:'Prod Workloads', roleName:'ReadOnly' },
+			{ accountId:'222222222222', accountName:'', roleName:'Admin' }
+		]
+		const out = t.populateSsoProfiles(config, { ssoSession:'acme', entries, region:'eu-west-1', version:'2.0.0' })
+		assert.deepEqual(out.added, ['acme-prod-workloads-readonly', 'acme-222222222222-admin'])
+		assert.deepEqual(out.existing, ['my-prod'])
+		const p = ini.getSection(out.config, 'profile acme-prod-workloads-readonly')
+		assert.deepEqual(p, { sso_session:'acme', sso_account_id:'111111111111', sso_role_name:'ReadOnly', region:'eu-west-1', output:'json', switch_profile_account_name:'Prod Workloads', switch_profile_generated:'acme', switch_profile_version:'2.0.0' })
+		assert.equal(t.listProfiles(out.config).find(x => x.name == 'acme-prod-workloads-readonly').accountName, 'Prod Workloads')
+	})
+
+	it('Should report and prune stale generated profiles only', () => {
+		const first = t.populateSsoProfiles('[sso-session acme]\nsso_start_url = https://acme.awsapps.com/start\n\n[profile manual]\nsso_session = acme\nsso_account_id = 9\nsso_role_name = Old\n', {
+			ssoSession:'acme', entries:[{ accountId:'1', accountName:'A', roleName:'R' }, { accountId:'2', accountName:'B', roleName:'R' }], version:'2.0.0'
+		})
+		const second = t.populateSsoProfiles(first.config, { ssoSession:'acme', entries:[{ accountId:'1', accountName:'A', roleName:'R' }], version:'2.0.0' })
+		assert.deepEqual(second.stale, ['acme-b-r'])
+		assert.deepEqual(second.removed, [])
+		const pruned = t.populateSsoProfiles(first.config, { ssoSession:'acme', entries:[{ accountId:'1', accountName:'A', roleName:'R' }], prune:true, version:'2.0.0' })
+		assert.deepEqual(pruned.removed, ['acme-b-r'])
+		assert.include(pruned.config, '[profile manual]', 'hand-written profiles are never pruned')
+		assert.notInclude(pruned.config, 'acme-b-r')
+	})
+
+	it('Should name generated profiles predictably and avoid clashes', () => {
+		assert.equal(t.generatedProfileName('Acme', 'Prod  Workloads!', '1', 'AdministratorAccess'), 'acme-prod-workloads-administratoraccess')
+		const out = t.populateSsoProfiles('[sso-session acme]\nsso_start_url = https://a.awsapps.com/start\n\n[profile acme-a-r]\nregion = x\n', { ssoSession:'acme', entries:[{ accountId:'1', accountName:'A', roleName:'R' }], version:'2' })
+		assert.deepEqual(out.added, ['acme-a-r-2'])
+	})
 })
+

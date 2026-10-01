@@ -24,6 +24,12 @@ const BLOCK_REGEX = /(^|\r?\n)# >>> switch-profile[^\n]*\r?\n[\s\S]*?# <<< switc
 
 const blockStart = version => `${BLOCK_START_PREFIX} v${version} (managed by switch-profile, do not edit) >>>`
 
+// Credentials in the environment take precedence over AWS_PROFILE (CLI, boto3) or are ignored by it
+// (JS SDK), and boto3 reads AWS_DEFAULT_PROFILE first. Switching clears them so every tool agrees.
+const CLEARED_VARS = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_DEFAULT_PROFILE']
+const SUBCOMMANDS = ['status', 'login', 'logout', 'add', 'remove', 'settings', 'use']
+const PROFILES_SED = 'sed -n \'s/^\\[profile \\(.*\\)\\]$/\\1/p\''
+
 const POSIX_FUNCTION = shell => `${FUNCTION_NAME}() {
 	local __sp_file __sp_status
 	__sp_file="$(mktemp "\${TMPDIR:-/tmp}/switch-profile.XXXXXX")" || return 1
@@ -35,10 +41,38 @@ const POSIX_FUNCTION = shell => `${FUNCTION_NAME}() {
 	__sp_status=$?
 	if [ -s "$__sp_file" ]; then
 		export AWS_PROFILE="$(cat "$__sp_file")"
+		unset ${CLEARED_VARS.join(' ')}
 	fi
 	rm -f "$__sp_file"
 	return $__sp_status
 }`
+
+const ZSH_COMPLETION = `_switch_profile_complete() {
+	local -a items
+	items=(\${(f)"$(${PROFILES_SED} "\${AWS_CONFIG_FILE:-$HOME/.aws/config}" 2>/dev/null)"})
+	if (( CURRENT == 2 )); then
+		compadd -- $items ${SUBCOMMANDS.join(' ')}
+	elif [[ $words[2] == (remove|rm) ]] || { (( CURRENT == 3 )) && [[ $words[2] == (use|login) ]] }; then
+		compadd -- $items
+	fi
+}
+if (( $+functions[compdef] )); then
+	compdef _switch_profile_complete ${FUNCTION_NAME} switch-profile
+fi`
+
+const BASH_COMPLETION = `_switch_profile_complete() {
+	local cur="\${COMP_WORDS[COMP_CWORD]}" items
+	items="$(${PROFILES_SED} "\${AWS_CONFIG_FILE:-$HOME/.aws/config}" 2>/dev/null)"
+	if [ "$COMP_CWORD" -eq 1 ]; then
+		items="$items ${SUBCOMMANDS.join(' ')}"
+	elif [ "$COMP_CWORD" -lt 2 ] || ! case "\${COMP_WORDS[1]}" in use|login|remove|rm) true ;; *) false ;; esac; then
+		return 0
+	elif [ "$COMP_CWORD" -gt 2 ] && [ "\${COMP_WORDS[1]}" != remove ] && [ "\${COMP_WORDS[1]}" != rm ]; then
+		return 0
+	fi
+	COMPREPLY=($(compgen -W "$items" -- "$cur"))
+}
+complete -F _switch_profile_complete ${FUNCTION_NAME} switch-profile`
 
 const FISH_FUNCTION = `function ${FUNCTION_NAME}
 	set -l __sp_file (mktemp)
@@ -50,27 +84,52 @@ const FISH_FUNCTION = `function ${FUNCTION_NAME}
 	set -l __sp_status $status
 	if test -s $__sp_file
 		set -gx AWS_PROFILE (cat $__sp_file)
+		set -e ${CLEARED_VARS.join(' ')}
 	end
 	rm -f $__sp_file
 	return $__sp_status
+end
+function __switch_profile_profiles
+	set -l cfg ~/.aws/config
+	set -q AWS_CONFIG_FILE; and set cfg $AWS_CONFIG_FILE
+	${PROFILES_SED} $cfg 2>/dev/null
+end
+for __sp_cmd in ${FUNCTION_NAME} switch-profile
+	complete -c $__sp_cmd -f -n 'test (count (commandline -opc)) -eq 1' -a '(__switch_profile_profiles) ${SUBCOMMANDS.join(' ')}'
+	complete -c $__sp_cmd -f -n 'test (count (commandline -opc)) -eq 2; and __fish_seen_subcommand_from use login' -a '(__switch_profile_profiles)'
+	complete -c $__sp_cmd -f -n '__fish_seen_subcommand_from remove rm' -a '(__switch_profile_profiles)'
 end`
 
 const POWERSHELL_FUNCTION = `function ${FUNCTION_NAME} {
+	param([Parameter(ValueFromRemainingArguments = $true)] [string[]] $Rest)
 	$spFile = [System.IO.Path]::GetTempFileName()
 	$env:SWITCH_PROFILE_SHELL = 'powershell'
 	$env:SWITCH_PROFILE_ENV_FILE = $spFile
 	try {
-		if (Get-Command switch-profile -ErrorAction SilentlyContinue) { switch-profile @args } else { npx --yes switch-profile @args }
+		if (Get-Command switch-profile -ErrorAction SilentlyContinue) { switch-profile @Rest } else { npx --yes switch-profile @Rest }
 	} finally {
 		Remove-Item Env:\\SWITCH_PROFILE_SHELL -ErrorAction SilentlyContinue
 		Remove-Item Env:\\SWITCH_PROFILE_ENV_FILE -ErrorAction SilentlyContinue
 	}
 	$spProfile = Get-Content -Raw $spFile -ErrorAction SilentlyContinue
-	if ($spProfile) { $env:AWS_PROFILE = $spProfile.Trim() }
+	if ($spProfile) {
+		$env:AWS_PROFILE = $spProfile.Trim()
+		${CLEARED_VARS.map(v => `Remove-Item Env:\\${v} -ErrorAction SilentlyContinue`).join('\n\t\t')}
+	}
 	Remove-Item $spFile -ErrorAction SilentlyContinue
-}`
+}
+$__spComplete = {
+	param($commandName, $parameterName, $wordToComplete)
+	$cfg = if ($env:AWS_CONFIG_FILE) { $env:AWS_CONFIG_FILE } else { Join-Path $HOME '.aws/config' }
+	$items = @(${SUBCOMMANDS.map(c => `'${c}'`).join(', ')})
+	if (Test-Path $cfg) { $items += Select-String -Path $cfg -Pattern '^\\[profile (.+)\\]' | ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() } }
+	$items | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+}
+Register-ArgumentCompleter -CommandName ${FUNCTION_NAME} -ParameterName Rest -ScriptBlock $__spComplete`
 
-const functionFor = shell => shell == 'fish' ? FISH_FUNCTION : shell == 'powershell' ? POWERSHELL_FUNCTION : POSIX_FUNCTION(shell)
+const functionFor = shell => shell == 'fish' ? FISH_FUNCTION
+	: shell == 'powershell' ? POWERSHELL_FUNCTION
+		: [POSIX_FUNCTION(shell), shell == 'zsh' ? ZSH_COMPLETION : BASH_COMPLETION].join('\n')
 
 /**
  * The full managed block for a shell, markers included.
@@ -235,6 +294,9 @@ const exportProfile = async profile => {
 
 module.exports = {
 	FUNCTION_NAME,
+	CLEARED_VARS,
+	SUBCOMMANDS,
+	functionFor,
 	BLOCK_END,
 	buildBlock,
 	findBlock,

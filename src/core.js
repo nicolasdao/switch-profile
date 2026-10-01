@@ -1,6 +1,25 @@
-require('colors')
-const { error: { catchErrors } } = require('puffy')
 const { exec, spawn } = require('child_process')
+
+/**
+ * Error that carries the errors that caused it. catchErrors flattens the chain into a list.
+ */
+class WrappedError extends Error {
+	constructor(message, errors) {
+		super(message)
+		this.errors = errors || []
+	}
+}
+
+const wrapErrors = (message, errors) => new WrappedError(message, errors)
+
+const flattenErrors = err => err instanceof WrappedError
+	? [new Error(err.message), ...err.errors.flatMap(flattenErrors)]
+	: [err instanceof Error ? err : new Error(String(err))]
+
+/**
+ * Resolves a promise into a tuple instead of throwing: [null, value] or [[...errors]].
+ */
+const catchErrors = promise => Promise.resolve(promise).then(value => [null, value], err => [flattenErrors(err)])
 
 const IS_WINDOWS = process.platform == 'win32'
 
@@ -62,35 +81,10 @@ const isCommandExist = (cmd, errorMsg) => () => catchErrors((async () => {
 	return true
 })())
 
-/**
- * 
- * @param  {[Error]} errors					
- * @param  {Boolean} options.noStack
- * @return {String}
- */
-const formatErrorMsg = (errors, options) => {
-	if (!errors || !errors.length)
-		return ''
-
-	const noStack = options && options.noStack
-	const msg = errors.map(e => noStack ? e.message||'' : e.stack||e.message||'').join('\n')
-	const prefix = /^error/.test(msg.toLowerCase().trim()) ? '' : 'ERROR - '
-	return `${prefix}${msg}`
-}
-
-const printErrors = (errors, options) => console.log(formatErrorMsg(errors, options).red)
-const printAWSerrors = (errors, options) => {
-	let msg = formatErrorMsg(errors, options)
-	if (msg.indexOf('ommand aws not found') >= 0)
-		msg += `\n\nTo fix this issue, try installing the ${'aws CLI'.bold}`
-	
-	console.log(msg.red)
-}
-
 module.exports = {
+	catchErrors,
+	wrapErrors,
 	exec: _exec,
 	run,
-	isCommandExist,
-	printErrors,
-	printAWSerrors
+	isCommandExist
 }

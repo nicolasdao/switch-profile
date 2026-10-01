@@ -52,11 +52,46 @@ const resolveLoginMode = (mode, { env, platform }) => {
 const loginFlags = (mode, { env, platform, cliVersion }) => {
 	if (!atLeast(cliVersion, DEVICE_CODE_MIN_CLI))
 		return [] // Device code is the only (default) flow on these versions.
-	return resolveLoginMode(mode, { env, platform }) == 'device' ? ['--use-device-code'] : []
+	// '--no-browser' makes the CLI print the URL that pre-fills the code, which the QR code encodes.
+	// switch-profile opens the browser itself when the machine has one.
+	return resolveLoginMode(mode, { env, platform }) == 'device' ? ['--use-device-code', '--no-browser'] : []
+}
+
+const URL_REGEX = /https:\/\/\S+/g
+const CODE_REGEX = /enter the code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})\b/i
+
+/**
+ * Parses what 'aws sso login' printed so far.
+ *
+ * Device code ('--no-browser') output looks like:
+ * 	Browser will not be automatically opened.
+ * 	Please visit the following URL:
+ *
+ * 	https://device.sso.us-east-1.amazonaws.com/
+ *
+ * 	Then enter the code:
+ *
+ * 	ABCD-EFGH
+ *
+ * 	Alternatively, you may visit the following URL which will autofill the code upon loading:
+ * 	https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH
+ *
+ * @param  {String} text
+ * @return {Object} { url, code, completeUrl }	Each may be null.
+ */
+const parseLoginOutput = text => {
+	text = text || ''
+	const urls = text.match(URL_REGEX) || []
+	const code = ((text.match(CODE_REGEX) || [])[1] || null)
+	const completeUrl = urls.find(u => /user_code=/.test(u)) || null
+	const url = urls.find(u => u !== completeUrl) || completeUrl || null
+	return { url, code, completeUrl }
 }
 
 module.exports = {
 	isRemoteSession,
 	resolveLoginMode,
-	loginFlags
+	loginFlags,
+	parseLoginOutput,
+	atLeast
 }

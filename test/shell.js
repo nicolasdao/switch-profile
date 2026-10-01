@@ -28,16 +28,43 @@ describe('shell', () => {
 		assert.equal(shell.removeBlock(withBlock), 'a=1\n\nb=2\n')
 	})
 
+	const fakeConfig = dir => {
+		fs.mkdirSync(join(dir, '.aws'), { recursive:true })
+		fs.writeFileSync(join(dir, '.aws', 'config'), '[default]\nregion = x\n\n[profile acme-prod]\nregion = x\n\n[profile acme-dev]\nregion = x\n\n[sso-session acme]\nsso_region = x\n')
+	}
+
+	;(hasShell('bash') ? it : xit)('Should complete profile names and subcommands in bash', () => {
+		const dir = fs.mkdtempSync(join(os.tmpdir(), 'sp-test-'))
+		fakeConfig(dir)
+		fs.writeFileSync(join(dir, 'rc'), shell.buildBlock('bash', '2.0.0') + '\n')
+		const complete = words => execFileSync('bash', ['-c', `. "${join(dir, 'rc')}"; COMP_WORDS=(${words}); COMP_CWORD=$((\${#COMP_WORDS[@]}-1)); _switch_profile_complete; echo "\${COMPREPLY[*]}"`], { env:{ PATH:'/usr/bin:/bin', HOME:dir } }).toString().trim()
+		assert.equal(complete('sp acme'), 'acme-prod acme-dev')
+		assert.equal(complete('sp st'), 'status')
+		assert.equal(complete('sp login acme-p'), 'acme-prod')
+		assert.equal(complete('sp status x'), '')
+		assert.equal(complete('sp remove acme-prod acme-d'), 'acme-dev')
+		assert.equal(complete('sp use acme-prod acme-d'), '')
+	}).timeout(15000)
+
+	;(hasShell('zsh') ? it : xit)('Should register zsh completion when compinit is loaded', () => {
+		const dir = fs.mkdtempSync(join(os.tmpdir(), 'sp-test-'))
+		fs.writeFileSync(join(dir, 'rc'), shell.buildBlock('zsh', '2.0.0') + '\n')
+		const out = execFileSync('zsh', ['-f', '-c', `autoload -Uz compinit && compinit -u -d "${join(dir, 'zcomp')}"; . "${join(dir, 'rc')}"; echo "$_comps[sp] $_comps[switch-profile]"`], { env:{ PATH:'/usr/bin:/bin', HOME:dir } }).toString().trim()
+		assert.equal(out, '_switch_profile_complete _switch_profile_complete')
+		// Without compinit, loading the block must not fail.
+		execFileSync('zsh', ['-f', '-c', `. "${join(dir, 'rc')}"`], { env:{ PATH:'/usr/bin:/bin', HOME:dir } })
+	}).timeout(15000)
+
 	for (const sh of ['zsh', 'bash']) {
 		(hasShell(sh) ? it : xit)(`Should set AWS_PROFILE in the calling ${sh} shell`, () => {
 			const dir = fs.mkdtempSync(join(os.tmpdir(), 'sp-test-'))
 			// Fake switch-profile: checks it was launched through the function and hands over a profile.
 			fs.writeFileSync(join(dir, 'switch-profile'), '#!/bin/sh\n[ "$SWITCH_PROFILE_SHELL" = "' + sh + '" ] || exit 3\nprintf "client-a" > "$SWITCH_PROFILE_ENV_FILE"\n', { mode:0o755 })
 			fs.writeFileSync(join(dir, 'rc'), shell.buildBlock(sh, '2.0.0') + '\n')
-			const out = execFileSync(sh, ['-c', `. "${join(dir, 'rc')}"; sp; echo "profile=$AWS_PROFILE"`], {
-				env: { PATH:`${dir}:/usr/bin:/bin`, TMPDIR:dir, HOME:dir }
+			const out = execFileSync(sh, ['-c', `. "${join(dir, 'rc')}"; sp; echo "profile=$AWS_PROFILE key=\${AWS_ACCESS_KEY_ID:-none} default=\${AWS_DEFAULT_PROFILE:-none}"`], {
+				env: { PATH:`${dir}:/usr/bin:/bin`, TMPDIR:dir, HOME:dir, AWS_ACCESS_KEY_ID:'AKIASTALE', AWS_DEFAULT_PROFILE:'old' }
 			}).toString()
-			assert.include(out, 'profile=client-a')
+			assert.include(out, 'profile=client-a key=none default=none')
 			assert.deepEqual(fs.readdirSync(dir).filter(f => f.startsWith('switch-profile.')), [], 'temp file must be removed')
 		}).timeout(15000)
 	}
