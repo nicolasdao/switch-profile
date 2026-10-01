@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-01
+
+### Fixed
+- Fix `sp` running a possibly outdated global install: it now always runs `npx switch-profile@latest`
+
+### Changed
+- Recommend running through npx in the docs, and drop the global-install tip shown after setting up `sp`
+- Add a hero image, a pitch and a "Built on AWS best practices" section to the README
+
 ## [2.0.0] - 2026-10-01
 
 ### Changed
@@ -148,4 +157,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 * Add support for choosing a default profile ([73d936f](https://github.com/nicolasdao/switch-profile/commit/73d936fa95d5240dbbeb12e3f640e7436f1cc76f))
 
+[2.0.1]: https://github.com/nicolasdao/switch-profile/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/nicolasdao/switch-profile/compare/v1.1.0...v2.0.0
