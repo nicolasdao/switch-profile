@@ -1,0 +1,22 @@
+{
+	"name": "scrutinize",
+	"version": "0.1.0",
+	"description": "Self-review and fix your own just-finished work in the same session — run a cold-reader sub-agent, harvest corrections, prove each finding, then auto-apply the green fixes.",
+	"keywords": ["testing", "ai", "code-review", "self-review", "verification"],
+	"type": "skill",
+	"license": "BSD-3-Clause",
+	"authors": ["Nicolas Dao <nicolas.dao@gmail.com>"],
+	"dependencies": {},
+	"systemDependencies": {
+		"git": {
+			"description": "Git — the skill scopes its review to the session changes via git status and git diff",
+			"version": ">=2.0.0",
+			"check": "git --version",
+			"install": {
+				"darwin": "brew install git",
+				"linux": "See https://git-scm.com/download/linux for install instructions",
+				"win32": "See https://git-scm.com/download/win for install instructions"
+			}
+		}
+	}
+}

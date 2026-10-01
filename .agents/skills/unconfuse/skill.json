@@ -1,0 +1,20 @@
+{
+	"name": "unconfuse",
+	"version": "0.1.0",
+	"description": "Re-explain your previous answer so a non-specialist understands it, then strip it to the shortest version that still lands. Diagnoses the confusion type first. Sibling of decision-brief.",
+	"keywords": [
+		"communication",
+		"explanation",
+		"clarity",
+		"teaching",
+		"concision",
+		"onboarding",
+		"readability"
+	],
+	"type": "skill",
+	"authors": [
+		"Nicolas Dao <nicolas.dao@gmail.com>"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {}
+}

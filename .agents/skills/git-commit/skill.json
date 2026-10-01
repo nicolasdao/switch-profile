@@ -1,0 +1,12 @@
+{
+	"name": "git-commit",
+	"version": "1.1.0",
+	"description": "Commit current session changes with a conventional commit message. Accepts optional freeform guidance to steer the commit (e.g. force a scope, split into multiple commits).",
+	"keywords": [
+		"git",
+		"commit",
+		"conventional-commit",
+		"changelog",
+		"version-control"
+	]
+}

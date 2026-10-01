@@ -1,0 +1,31 @@
+{
+	"name": "session-status",
+	"version": "0.1.0",
+	"description": "One-screen session ledger for asynchronous work. Shows what is done, what is left, what is waiting and why, and what only you can unblock. Derived from git and specs, never recollection. Read-only.",
+	"type": "skill",
+	"authors": [
+		"Nicolas Dao <nicolas.dao@gmail.com>"
+	],
+	"license": "BSD-3-Clause",
+	"keywords": [
+		"status",
+		"session",
+		"ledger",
+		"handover",
+		"progress",
+		"standup",
+		"context-recovery"
+	],
+	"dependencies": {},
+	"systemDependencies": {
+		"git": {
+			"description": "Reads commit history and working-tree state, which is the ledger's primary source of truth instead of the assistant's recollection.",
+			"check": "git --version",
+			"install": {
+				"darwin": "brew install git",
+				"linux": "sudo apt-get install -y git",
+				"win32": "winget install --id Git.Git -e --source winget"
+			}
+		}
+	}
+}

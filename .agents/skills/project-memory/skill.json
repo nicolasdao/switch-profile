@@ -1,0 +1,56 @@
+{
+	"name": "project-memory",
+	"version": "0.8.1",
+	"description": "Perpetual project memory for Claude Code, Cursor, Codex. Defeats LLM amnesia, context rot, hallucination with living agent-recallable docs. Project-scoped alternative to Karpathy LLM Wiki.",
+	"keywords": [
+		"ai",
+		"documentation",
+		"project-memory",
+		"agent-memory",
+		"llm-memory",
+		"claude-code",
+		"cursor",
+		"llm-wiki",
+		"agents-md",
+		"context-engineering",
+		"hallucination",
+		"amnesia",
+		"context-rot",
+		"progressive-disclosure",
+		"persistent-context"
+	],
+	"type": "skill",
+	"authors": [
+		"Nicolas Dao (nicolas.dao@gmail.com)"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {
+		"nicolasdao/init-doc": ">=1.10.0",
+		"nicolasdao/update-doc": "*",
+		"nicolasdao/refactor-doc": "*",
+		"nicolasdao/init-context": ">=1.10.0",
+		"nicolasdao/init-mission": "*"
+	},
+	"systemDependencies": {
+		"git": {
+			"description": "Git version control",
+			"version": ">=2.20.0",
+			"check": "git --version",
+			"install": {
+				"darwin": "brew install git",
+				"linux": "apt install git",
+				"win32": "winget install Git.Git"
+			}
+		},
+		"python3": {
+			"description": "Python 3 runtime for the bundled init-doc manifest generator (Inspect --check/--drift)",
+			"version": ">=3.8",
+			"check": "python3 --version",
+			"install": {
+				"darwin": "brew install python",
+				"linux": "apt install python3",
+				"win32": "See https://www.python.org/downloads/windows/ for install instructions"
+			}
+		}
+	}
+}

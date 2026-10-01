@@ -1,0 +1,41 @@
+{
+	"name": "init-context",
+	"version": "1.10.0",
+	"type": "skill",
+	"description": "Load project documentation into AI agent context at session start — README, mission, gotchas, relevant topics. Part of Project Memory. Defeats LLM amnesia between sessions.",
+	"keywords": [
+		"documentation",
+		"context",
+		"readme",
+		"ai",
+		"memory",
+		"agent-memory",
+		"project-memory"
+	],
+	"authors": [
+		"Nicolas Dao (nicolas.dao@gmail.com)"
+	],
+	"license": "BSD-3-Clause",
+	"systemDependencies": {
+		"git": {
+			"description": "Git version control (Step 1 runs git rev-parse to find the project root)",
+			"version": ">=2.20.0",
+			"check": "git --version",
+			"install": {
+				"darwin": "brew install git",
+				"linux": "apt install git",
+				"win32": "winget install Git.Git"
+			}
+		},
+		"python3": {
+			"description": "Python 3 runtime (standard library only) for scripts/manifest-query.py, which reads the lean retrieval index and maps file paths to the docs covering them",
+			"version": ">=3.8",
+			"check": "python3 --version",
+			"install": {
+				"darwin": "brew install python",
+				"linux": "apt install python3",
+				"win32": "See https://www.python.org/downloads/windows/ for install instructions"
+			}
+		}
+	}
+}

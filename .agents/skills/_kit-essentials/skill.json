@@ -1,0 +1,50 @@
+{
+	"name": "_kit-essentials",
+	"version": "0.6.0",
+	"description": "Essential skills for any project \u2014 perpetual memory, specs, conventional commits, decision briefs, plain-English re-explanations, pre-implementation audits, self-review, and session status.",
+	"keywords": [
+		"essentials",
+		"kit",
+		"project-management",
+		"project-memory",
+		"memory",
+		"specification",
+		"spec",
+		"version-control",
+		"git",
+		"commit",
+		"scrutinize",
+		"review",
+		"verification",
+		"second-opinion",
+		"audit",
+		"session-status",
+		"status",
+		"ledger",
+		"handover",
+		"open-items",
+		"blockers",
+		"todo",
+		"claude-code",
+		"cursor",
+		"decision-brief",
+		"concision",
+		"clarity",
+		"explanation",
+		"unconfuse"
+	],
+	"type": "kit",
+	"authors": [
+		"Nicolas Dao (nicolas.dao@gmail.com)"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {
+		"nicolasdao/_kit-doc-essentials": "*",
+		"nicolasdao/decision-brief": "*",
+		"nicolasdao/open-items": "*",
+		"nicolasdao/scrutinize": "*",
+		"nicolasdao/second-opinion": "*",
+		"nicolasdao/session-status": "*",
+		"nicolasdao/unconfuse": "*"
+	}
+}

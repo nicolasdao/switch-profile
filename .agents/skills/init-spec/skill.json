@@ -1,0 +1,27 @@
+{
+	"name": "init-spec",
+	"version": "0.3.0",
+	"description": "Generate a one-shot-ready SPEC.md under specs/YYMMDD-NN-slug/, move a spec folder to specs/-DONE or specs/-ARCHIVED, or configure per-project spec rules via an external rules file.",
+	"keywords": [
+		"spec",
+		"specification",
+		"spec-driven",
+		"one-shot",
+		"session-handoff",
+		"planning",
+		"devops",
+		"implementation-plan",
+		"config",
+		"project-rules"
+	],
+	"type": "skill",
+	"config": {
+		"rulesFile": {
+			"type": "string",
+			"default": "",
+			"prompt": false,
+			"description": "Path (relative to project root) to a project-specific spec-rules markdown file. When set and the file exists, init-spec reads it and folds its rules into every SPEC.md it authors. Empty = default behavior, no extra rules."
+		}
+	},
+	"dependencies": {}
+}

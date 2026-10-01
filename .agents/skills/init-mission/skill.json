@@ -1,0 +1,31 @@
+{
+	"name": "init-mission",
+	"version": "0.6.0",
+	"description": "Create docs/mission.md — vision, values, non-goals, users, UX. The decision-making compass loaded by init-context in every session. Part of the ProjectMemory constellation.",
+	"keywords": [
+		"mission",
+		"vision",
+		"values",
+		"documentation",
+		"ai",
+		"interview"
+	],
+	"type": "skill",
+	"authors": [
+		"Nicolas Dao (nicolas.dao@gmail.com)"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {},
+	"systemDependencies": {
+		"git": {
+			"description": "Git version control (reconnaissance + project-root detection run git rev-parse)",
+			"version": ">=2.20.0",
+			"check": "git --version",
+			"install": {
+				"darwin": "brew install git",
+				"linux": "apt install git",
+				"win32": "winget install Git.Git"
+			}
+		}
+	}
+}

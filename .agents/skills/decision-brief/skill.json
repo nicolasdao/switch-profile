@@ -1,0 +1,20 @@
+{
+	"name": "decision-brief",
+	"version": "0.1.0",
+	"description": "Recast your previous answer into a scannable decision brief \u2014 verdict first, bullet-first, lossless on any caveat that changes a decision, lossy on process. Successor to reframe-last-answer.",
+	"keywords": [
+		"communication",
+		"decision-making",
+		"executive-brief",
+		"concision",
+		"summarization",
+		"reframe",
+		"readability"
+	],
+	"type": "skill",
+	"authors": [
+		"Nicolas Dao <nicolas.dao@gmail.com>"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {}
+}

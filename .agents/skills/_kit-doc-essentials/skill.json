@@ -1,0 +1,38 @@
+{
+	"name": "_kit-doc-essentials",
+	"version": "1.1.1",
+	"description": "Perpetual project memory kit — turn project docs into living, agent-readable memory via the Project Memory constellation, plus git-commit for clean conventional doc commits.",
+	"keywords": [
+		"documentation",
+		"docs",
+		"readme",
+		"project-memory",
+		"agent-memory",
+		"llm-memory",
+		"perpetual-memory",
+		"infinite-memory",
+		"source-controlled-memory",
+		"context",
+		"context-engineering",
+		"amnesia",
+		"hallucination",
+		"knowledge-base",
+		"claude-code",
+		"cursor",
+		"llm-wiki",
+		"kit",
+		"git",
+		"commit",
+		"devops"
+	],
+	"type": "kit",
+	"authors": [
+		"Nicolas Dao (nic@cloudlesslabs.com)"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {
+		"nicolasdao/project-memory": "*",
+		"nicolasdao/git-commit": "*",
+		"nicolasdao/init-spec": "*"
+	}
+}

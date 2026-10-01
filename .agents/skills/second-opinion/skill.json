@@ -1,0 +1,10 @@
+{
+	"name": "second-opinion",
+	"version": "0.1.0",
+	"description": "Pre-implementation audit of a delivered analysis — re-verify claims at primary sources, test rival diagnoses, sweep the fix plan for side effects, and issue an UPHELD, AMENDED, or OVERTURNED verdict.",
+	"keywords": ["verification", "analysis", "review", "ai", "diagnosis", "red-team", "second-opinion"],
+	"type": "skill",
+	"license": "BSD-3-Clause",
+	"authors": ["Nicolas Dao <nicolas.dao@gmail.com>"],
+	"dependencies": {}
+}

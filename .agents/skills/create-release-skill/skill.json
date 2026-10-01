@@ -1,0 +1,42 @@
+{
+	"name": "create-release-skill",
+	"version": "0.4.1",
+	"description": "Create tailored release skills for any project type. Reverse-engineers the project, determines versioning, and generates a release skill with changelog, semver, and git integration.",
+	"keywords": [
+		"release",
+		"changelog",
+		"semver",
+		"versioning",
+		"git-tag",
+		"release-automation",
+		"keep-a-changelog",
+		"monorepo",
+		"deployment"
+	],
+	"type": "skill",
+	"dependencies": {
+		"happyskillsai/happyskills-design": ">=0.14.1"
+	},
+	"systemDependencies": {
+		"node": {
+			"description": "Node.js runtime (required for npx and HappySkills CLI)",
+			"version": ">=18.0.0",
+			"check": "node --version",
+			"install": {
+				"darwin": "brew install node",
+				"linux": "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt install -y nodejs",
+				"win32": "winget install OpenJS.NodeJS.LTS"
+			}
+		},
+		"git": {
+			"description": "Git version control",
+			"version": ">=2.0.0",
+			"check": "git --version",
+			"install": {
+				"darwin": "xcode-select --install",
+				"linux": "sudo apt install git",
+				"win32": "winget install Git.Git"
+			}
+		}
+	}
+}

@@ -1,0 +1,43 @@
+{
+	"name": "init-doc",
+	"version": "1.10.0",
+	"description": "Bootstrap codebase documentation from source code, or from the session that created the project. Part of the ProjectMemory constellation. Creates README.md hub and docs/ folder.",
+	"keywords": [
+		"documentation",
+		"docs",
+		"bootstrap",
+		"readme",
+		"init",
+		"devops"
+	],
+	"type": "skill",
+	"authors": [
+		"Nicolas Dao (nicolas.dao@gmail.com)"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {
+		"nicolasdao/init-mission": "*"
+	},
+	"systemDependencies": {
+		"git": {
+			"description": "Git version control",
+			"version": ">=2.20.0",
+			"check": "git --version",
+			"install": {
+				"darwin": "brew install git",
+				"linux": "apt install git",
+				"win32": "winget install Git.Git"
+			}
+		},
+		"python3": {
+			"description": "Python 3 runtime (standard library only) for scripts/build-doc-manifest.py",
+			"version": ">=3.8",
+			"check": "python3 --version",
+			"install": {
+				"darwin": "brew install python",
+				"linux": "apt install python3",
+				"win32": "See https://www.python.org/downloads/windows/ for install instructions"
+			}
+		}
+	}
+}

@@ -1,0 +1,40 @@
+{
+	"name": "update-doc",
+	"version": "1.9.0",
+	"type": "skill",
+	"description": "Maintain project documentation in sync with code changes — features, APIs, CLI, architectural. Part of the ProjectMemory constellation.",
+	"keywords": [
+		"devops",
+		"documentation",
+		"docs"
+	],
+	"authors": [
+		"Nicolas Dao (nicolas.dao@gmail.com)"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {
+		"nicolasdao/init-doc": "*"
+	},
+	"systemDependencies": {
+		"git": {
+			"description": "Git version control",
+			"version": ">=2.20.0",
+			"check": "git --version",
+			"install": {
+				"darwin": "brew install git",
+				"linux": "apt install git",
+				"win32": "winget install Git.Git"
+			}
+		},
+		"python3": {
+			"description": "Python 3 runtime for the bundled init-doc manifest generator (diff mapping + regeneration)",
+			"version": ">=3.8",
+			"check": "python3 --version",
+			"install": {
+				"darwin": "brew install python",
+				"linux": "apt install python3",
+				"win32": "See https://www.python.org/downloads/windows/ for install instructions"
+			}
+		}
+	}
+}

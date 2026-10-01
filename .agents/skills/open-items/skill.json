@@ -1,0 +1,35 @@
+{
+	"name": "open-items",
+	"version": "0.3.0",
+	"description": "Print only what is still open in the session — a headline count, then a dependency-ordered table of item, why it is not closed, and what blocks it. For a reader who wants it at a glance, not a recap.",
+	"type": "skill",
+	"authors": [
+		"Nicolas Dao <nicolas.dao@gmail.com>"
+	],
+	"license": "BSD-3-Clause",
+	"keywords": [
+		"open-items",
+		"session",
+		"status",
+		"blockers",
+		"handoff",
+		"checklist",
+		"todo",
+		"unfinished",
+		"decision",
+		"unblock"
+	],
+	"dependencies": {},
+	"systemDependencies": {
+		"git": {
+			"description": "Git version control — used read-only to verify uncommitted work, unpushed commits and unpublished tags",
+			"version": ">=2.0.0",
+			"check": "git --version",
+			"install": {
+				"darwin": "xcode-select --install",
+				"linux": "sudo apt install git",
+				"win32": "winget install Git.Git"
+			}
+		}
+	}
+}

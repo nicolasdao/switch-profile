@@ -1,0 +1,84 @@
+{
+	"name": "happyskills-design",
+	"version": "0.14.3",
+	"type": "skill",
+	"description": "HappySkills skill design and quality — author new skills, audit existing ones, update from session learnings, and create kits with full Claude Code spec + HappySkills conventions.",
+	"authors": [
+		"Nicolas Dao <nic@happyskills.ai>"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {},
+	"capabilities": [
+		{
+			"id": "create-skill",
+			"summary": "design and scaffold a new skill",
+			"intents": [
+				"design a skill",
+				"create a new skill",
+				"scaffold a skill",
+				"init a skill",
+				"start building a skill for X"
+			],
+			"commands": [
+				"init"
+			]
+		},
+		{
+			"id": "review-skill",
+			"summary": "review or audit an existing skill for quality and best practices (no CLI command; an authoring workflow)",
+			"intents": [
+				"review my skill",
+				"audit my skill",
+				"check my SKILL.md for best practices",
+				"is my skill well designed",
+				"health-check a skill"
+			],
+			"commands": []
+		},
+		{
+			"id": "improve-skill",
+			"summary": "update a skill from session learnings or refine its content (no CLI command; an authoring workflow)",
+			"intents": [
+				"update this skill based on what we did",
+				"apply session learnings to a skill",
+				"improve or refine a skill",
+				"edit a skill's content"
+			],
+			"commands": []
+		},
+		{
+			"id": "manage-kits",
+			"summary": "create and edit kits that bundle multiple skills (no CLI command; an authoring workflow)",
+			"intents": [
+				"create a kit",
+				"bundle skills into a kit",
+				"edit my kit",
+				"add or remove a skill from my kit",
+				"change what my kit bundles"
+			],
+			"commands": []
+		}
+	],
+	"systemDependencies": {
+		"node": {
+			"description": "Node.js runtime (for npx happyskills)",
+			"version": ">=18.0.0",
+			"check": "node --version",
+			"install": {
+				"darwin": "brew install node",
+				"linux": "Use nvm: https://github.com/nvm-sh/nvm",
+				"win32": "winget install OpenJS.NodeJS"
+			}
+		},
+		"npm": {
+			"description": "npm package manager (ships with Node.js, used to invoke npx happyskills)",
+			"version": ">=9.0.0",
+			"check": "npm --version",
+			"install": {
+				"darwin": "Ships with Node.js — install via brew install node",
+				"linux": "Ships with Node.js — install via nvm",
+				"win32": "Ships with Node.js — install via winget install OpenJS.NodeJS"
+			}
+		}
+	}
+}

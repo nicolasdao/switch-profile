@@ -1,0 +1,46 @@
+{
+	"name": "refactor-doc",
+	"version": "0.8.0",
+	"description": "Restructure and re-architect documentation while preserving every word — split big files, gotchas to hub+domain, re-derive stale domains from source, regenerate the manifest. Proves no content lost.",
+	"keywords": [
+		"documentation",
+		"docs",
+		"refactor",
+		"restructure",
+		"toc",
+		"gotchas",
+		"hub-and-spoke",
+		"project-memory",
+		"devops"
+	],
+	"type": "skill",
+	"authors": [
+		"Nicolas Dao (nicolas.dao@gmail.com)"
+	],
+	"license": "BSD-3-Clause",
+	"dependencies": {
+		"nicolasdao/init-doc": "*"
+	},
+	"systemDependencies": {
+		"git": {
+			"description": "Git version control",
+			"version": ">=2.20.0",
+			"check": "git --version",
+			"install": {
+				"darwin": "brew install git",
+				"linux": "apt install git",
+				"win32": "winget install Git.Git"
+			}
+		},
+		"python3": {
+			"description": "Python 3 runtime for the bundled init-doc manifest generator (Phase 3/4 regeneration + --check)",
+			"version": ">=3.8",
+			"check": "python3 --version",
+			"install": {
+				"darwin": "brew install python",
+				"linux": "apt install python3",
+				"win32": "See https://www.python.org/downloads/windows/ for install instructions"
+			}
+		}
+	}
+}
