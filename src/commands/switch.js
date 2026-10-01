@@ -1,6 +1,9 @@
 /**
- * The main flow: status line, searchable picker, login when needed, identity check, then the default profile
- * and (through the 'sp' shortcut) this terminal switch to the chosen profile.
+ * The main flow: the home screen (status line, profile search, action bar), login when needed, identity check,
+ * then the default profile and (through the 'sp' shortcut) this terminal switch to the chosen profile.
+ *
+ * Actions open as pages and come back to the home screen; Esc inside a page goes back, Esc on the home screen
+ * quits. A successful switch ends the session: 'sp' can only set AWS_PROFILE once the process exits.
  */
 const p = require('@clack/prompts')
 const aws = require('../aws')
@@ -8,12 +11,11 @@ const settings = require('../settings')
 const shell = require('../shell')
 const rank = require('../rank')
 const ui = require('../ui')
-const { ask, preflight, loadState, loginKey, describe, loginState } = require('./common')
+const { ask, preflight, loadState, loginKey, describe, loginState, CancelError } = require('./common')
 const { ssoLogin } = require('./login-flow')
+const { home, ACTION_PREFIX } = require('../home')
 
-const ACTION = '__action__:'
-
-const header = async state => {
+const header = async (state, { warnings } = {}) => {
 	p.intro(`${ui.badge('switch-profile')} ${ui.dim(settings.CLI_VERSION)}`)
 	const lines = []
 	if (state.defaultProfile) {
@@ -32,7 +34,8 @@ const header = async state => {
 	if (terminal && terminal != state.defaultName)
 		lines.push(`${ui.dim('This terminal uses')} ${ui.accent(terminal)} ${ui.dim('(AWS_PROFILE)')}`)
 	p.log.message(lines.join('\n'))
-	warnEnv()
+	if (warnings)
+		warnEnv()
 }
 
 /**
@@ -46,12 +49,13 @@ const warnEnv = () => {
 	p.log.warn(`${set.join(', ')} ${set.length > 1 ? 'are' : 'is'} set in this terminal and override${set.length > 1 ? '' : 's'} profiles.\n${ui.dim(viaShortcut ? 'Switching clears them from this terminal.' : `Unset ${set.length > 1 ? 'them' : 'it'}, or switch with ${shell.FUNCTION_NAME} to clear ${set.length > 1 ? 'them' : 'it'} automatically.`)}`)
 }
 
+// The action bar of the home screen. Each opens a page that comes back to the home screen.
 const ACTIONS = [
-	{ key:'add', icon:'+', label:'Add profiles', hint:'import accounts from an SSO portal, or create one' },
-	{ key:'login', icon:'↻', label:'Log in again', hint:'start a fresh SSO session for the current profile' },
-	{ key:'remove', icon:'−', label:'Remove profiles' },
-	{ key:'logout', icon:'⏻', label:'Log out', hint:'end every SSO session on this machine' },
-	{ key:'settings', icon:'⚙', label:'Settings' }
+	{ key:'login', label:'Log in' },
+	{ key:'add', label:'Add' },
+	{ key:'remove', label:'Remove' },
+	{ key:'logout', label:'Log out' },
+	{ key:'settings', label:'Settings' }
 ]
 
 const buildRows = (profiles, state) => {
@@ -78,26 +82,15 @@ const buildRows = (profiles, state) => {
 }
 
 /**
- * Shows the picker. Resolves with a profile name, or an action key prefixed with ACTION.
+ * Shows the home screen. Resolves with a profile name, ACTION_PREFIX + an action key, or the cancel symbol.
  */
-const pick = async (state, initialQuery) => {
-	const actions = ACTIONS.map(a => ({ value:ACTION + a.key, label:`${ui.accent(ui.unicode ? a.icon : '>')} ${a.label}`, hint:a.hint, text:a.label.toLowerCase() }))
-	const maxItems = Math.max(5, Math.min(14, (process.stdout.rows || 24) - 10))
-	return ask(p.autocomplete({
-		message: `Switch to ${ui.dim('· type a name, account, role or client')}`,
-		maxItems,
-		initialUserInput: initialQuery || undefined,
-		// Rows are already filtered and ranked below; clack would otherwise re-filter them by substring.
-		filter: () => true,
-		options() {
-			const query = this.userInput || ''
-			const ranked = rank.rankProfiles(state.profiles, { query, usage:state.settings.usage, current:state.defaultName })
-			const q = query.trim().toLowerCase()
-			const matchingActions = actions.filter(a => !q || a.text.includes(q)).map(a => ({ value:a.value, label:a.label, hint:a.hint }))
-			return [...buildRows(ranked, state), ...matchingActions]
-		}
-	}))
-}
+const pick = (state, initialQuery) => home({
+	message: `Switch to ${ui.dim('· type a name, account, role or client')}`,
+	maxItems: Math.max(5, Math.min(14, (process.stdout.rows || 24) - 14)),
+	initialQuery,
+	actions: ACTIONS,
+	rows: query => buildRows(rank.rankProfiles(state.profiles, { query, usage:state.settings.usage, current:state.defaultName }), state)
+})
 
 /**
  * Connects to a profile: checks the identity it resolves to, logging in first when needed.
@@ -147,8 +140,15 @@ const firstLine = text => String(text || '').trim().split('\n').filter(Boolean).
 
 /**
  * Switches to a profile and reports what happened.
+ *
+ * @return {Object} { switched: true }
  */
 const switchTo = async (profile, state, opts) => {
+	await doSwitch(profile, state, opts)
+	return { switched:true }
+}
+
+const doSwitch = async (profile, state, opts) => {
 	const { interactive, json } = opts
 	const identity = await connect(profile, state, { interactive, quiet:json, force:opts.force })
 
@@ -230,6 +230,65 @@ const runAction = async (key, state, opts) => {
 }
 
 /**
+ * Pure: what the home screen's answer means.
+ *
+ * @return {Object} { type: 'quit' } | { type: 'switch', name } | { type: 'page', key }
+ */
+const routeChoice = choice => {
+	if (p.isCancel(choice))
+		return { type:'quit' }
+	const value = String(choice)
+	return value.startsWith(ACTION_PREFIX) ? { type:'page', key:value.slice(ACTION_PREFIX.length) } : { type:'switch', name:value }
+}
+
+/**
+ * Pure: what happens after a page ran.
+ *
+ * @return {String} 'exit' (the page switched profile), 'back' (Esc in the page), 'error' (expected failure,
+ *                  shown, then home), 'home' (page finished), or 'throw' (unexpected error)
+ */
+const afterPage = (result, err) => {
+	if (err)
+		return err instanceof CancelError ? 'back' : err instanceof ui.CliError ? 'error' : 'throw'
+	return result && result.switched ? 'exit' : 'home'
+}
+
+/**
+ * The home screen loop: pick a profile (switch and exit) or open a page and come back.
+ */
+const homeLoop = async (state, opts, initialQuery) => {
+	let first = true
+	for (;;) {
+		await header(state, { warnings:first })
+		const route = routeChoice(await pick(state, first ? initialQuery : undefined))
+		first = false
+		if (route.type == 'quit') {
+			p.outro(ui.dim(`Bye ${ui.unicode ? '👋' : ''}`))
+			return
+		}
+		if (route.type == 'switch')
+			return switchTo(state.profiles.find(x => x.name == route.name), state, opts)
+
+		let result, error
+		try {
+			result = await runAction(route.key, state, opts)
+		} catch(err) {
+			error = err
+		}
+		const next = afterPage(result, error)
+		if (next == 'exit')
+			return result
+		if (next == 'throw')
+			throw error
+		if (next == 'back')
+			p.cancel(ui.dim(`${ui.unicode ? '←' : '<-'} Back`))
+		if (next == 'error')
+			ui.printError(error)
+		state = await loadState()
+	}
+}
+
+/**
  * Default command: 'switch-profile [query]'.
  */
 const switchCommand = async (query, opts) => {
@@ -261,14 +320,12 @@ const switchCommand = async (query, opts) => {
 	} else if (!interactive)
 		throw new ui.CliError('Which profile? Pass its name.', { code:3, hint:`e.g. switch-profile ${state.profiles[0].name}` })
 
-	await header(state)
-	const choice = await pick(state, query)
-	if (choice.startsWith(ACTION))
-		return runAction(choice.slice(ACTION.length), state, { ...opts, interactive })
-	return switchTo(state.profiles.find(x => x.name == choice), state, { ...opts, interactive })
+	return homeLoop(state, { ...opts, interactive }, query)
 }
 
 module.exports = {
+	routeChoice,
+	afterPage,
 	switchCommand,
 	switchTo,
 	connect,
