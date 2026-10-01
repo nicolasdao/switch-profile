@@ -1,6 +1,35 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com),
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+## [2.0.0] - 2026-10-01
+
+### Changed
+- Change `[default]` to hold the selected profile's settings instead of temporary credentials copied into `~/.aws/credentials`, so the AWS CLI, SDKs and Terraform refresh credentials on their own. 1.x setups are migrated automatically, with backups in `~/.aws/*.bak-*`
+- Require Node.js 20.12 or later
+- Replace the numbered menu and "More options" with an inline, searchable picker ranked by recent use
+- Ship the package as a single bundled file with no runtime dependencies (about 100 kB instead of 36 MB installed)
+
+### Added
+- Add direct switching with `switch-profile <name>` or `sp <name>`, with fuzzy multi-word matching across name, account ID, role, client and region
+- Add the `sp` shortcut (zsh, bash, fish, PowerShell) that sets `AWS_PROFILE` in the current terminal, clears overriding credential variables and adds tab-completion
+- Add the `use`, `status`, `login`, `logout`, `add`, `remove` and `settings` commands, plus `--json`, `--no-input` and documented exit codes for scripts and AI agents
+- Add a device-code login screen with clipboard copy (also over SSH, via OSC 52), a QR code, a timer and a phishing warning. Device code is used automatically over SSH
+- Add importing every account and role of an IAM Identity Center portal, with re-sync and pruning of stale generated profiles
+- Add console sign-in profiles (`aws login`) and a warning before creating access-key profiles
+- Add an identity check after every switch, PROD badges, and warnings for production accounts and overriding environment variables
+- Add Settings for per-terminal switching, SSO login mode and the legacy SSO profile upgrade
+- Add an optional upgrade of legacy SSO profiles to `[sso-session]` (auto-refresh), and version stamps recording which release wrote each file
+
+### Fixed
+- Fix SSO logins hanging on remote machines with AWS CLI 2.22 or later
+- Fix the default region being overwritten with the SSO region
+- Fix partial writes to `~/.aws` files by writing them atomically
 
 ## [1.1.0](https://github.com/nicolasdao/switch-profile/compare/v1.0.0...v1.1.0) (2026-03-21)
 
@@ -118,3 +147,5 @@ All notable changes to this project will be documented in this file. See [standa
 ### Features
 
 * Add support for choosing a default profile ([73d936f](https://github.com/nicolasdao/switch-profile/commit/73d936fa95d5240dbbeb12e3f640e7436f1cc76f))
+
+[2.0.0]: https://github.com/nicolasdao/switch-profile/compare/v1.1.0...v2.0.0
