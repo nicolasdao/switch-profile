@@ -51,6 +51,8 @@ The ESLint configuration (`.eslintrc.json`) enforces:
 
 The `--fix` flag auto-fixes style issues when possible.
 
+**Known issue:** `npm run lint` currently fails. The project depends on ESLint 10, which no longer reads `.eslintrc.json` (the "eslintrc" format was removed in favor of flat config). The configuration needs to be migrated to an `eslint.config.js` file (see the [ESLint migration guide](https://eslint.org/docs/latest/use/configure/migration-guide)). Until then, follow the rules above by hand.
+
 ## Testing
 
 ```shell
@@ -58,9 +60,18 @@ npm test
 # Runs: mocha --exit
 ```
 
-Tests are located in `test/index.js` and use [Mocha](https://mochajs.org/) as the test runner and [Chai](https://www.chaijs.com/) for assertions.
+Tests use [Mocha](https://mochajs.org/) as the test runner and [Chai](https://www.chaijs.com/) for assertions. Mocha runs every file in `test/`:
 
-**Current state:** The test suite contains a single placeholder test. There are no functional tests for the AWS operations, profile management, or file I/O.
+| File | Covers |
+|------|--------|
+| `test/ini.js` | `src/ini.js`: reading sections, replacing/creating/removing sections, in-place key edits, CRLF preservation |
+| `test/transforms.js` | `src/aws/transforms.js`: the `[default]` format for SSO and standard profiles, no stamp duplication, 1.x detection and stripping, legacy SSO detection and upgrade (shared sessions, reuse of existing sessions, name clashes), session names from start URLs |
+| `test/login.js` | `src/aws/login.js`: device code over SSH, Linux without a display, explicit modes, no flag for AWS CLI < 2.22.0 |
+| `test/shell.js` | `src/shell.js`: adding, updating and removing the managed block; real `zsh` and `bash` runs of the `sp` function with a fake `switch-profile` (skipped if the shell is not installed) |
+| `test/migrate.js` | `src/migrate.js` run against a temporary `HOME`: 1.x migration with backups, idempotence, legacy SSO upgrade rewriting `[default]`, refusal of a newer format |
+| `test/index.js` | Placeholder |
+
+The tests never touch your real `~/.aws` files: pure modules are tested on strings, and `test/migrate.js` points `HOME` to a temporary folder (clearing the `src/` module cache so paths are recomputed). The `index.js` menus and the calls to the real AWS CLI are not covered.
 
 **Test utilities (from comments in test file):**
 - Skip a test: Use `xit` instead of `it`, or `describe.skip` instead of `describe`.
@@ -76,10 +87,10 @@ Tests are located in `test/index.js` and use [Mocha](https://mochajs.org/) as th
 | `inquirer` | Interactive prompts (list, input, confirm, checkbox) |
 | `inquirer-autocomplete-prompt` | Autocomplete support for region selection |
 | `colors` | Colored terminal output |
-| `puffy` | Error handling (`catchErrors`, `wrapErrors`, `delay`) |
-| `core-async` | Generator-based async flow (co-routines) |
-| `fast-glob` | File pattern matching for cache directory scanning |
-| `rimraf` | Cross-platform recursive directory deletion |
+| `puffy` | Error handling (`catchErrors`, `wrapErrors`) |
+| `core-async` | Generator-based async flow (used internally by fileHelper) |
+| `fast-glob` | File pattern matching (imported by fileHelper, unused in current flows) |
+| `rimraf` | Recursive directory deletion (imported by fileHelper, unused in current flows) |
 | `mime-types` | MIME type detection (used by fileHelper, not core functionality) |
 | `archiver` | ZIP creation (imported by fileHelper, unused in current flows) |
 | `tar-stream` | TAR streaming (imported by fileHelper, unused in current flows) |
@@ -96,7 +107,7 @@ Tests are located in `test/index.js` and use [Mocha](https://mochajs.org/) as th
 
 ### Unused Dependencies
 
-The `fileHelper.js` module is a shared utility library that imports several packages not used by `switch-profile`'s core functionality: `archiver`, `tar-stream`, `convert-stream`, and partially `mime-types`. These are present because `fileHelper.js` provides general-purpose file operations that may be used in other projects sharing this codebase.
+The `fileHelper.js` module is a shared utility library that imports several packages not used by `switch-profile`'s core functionality: `archiver`, `tar-stream`, `convert-stream`, `fast-glob`, `rimraf` and `mime-types`. Only its `exists` and `json.get` functions are used. These are present because `fileHelper.js` provides general-purpose file operations that may be used in other projects sharing this codebase.
 
 ## Release Process
 
@@ -165,4 +176,7 @@ Prefixes:
 - **Single quotes** for strings.
 - **CommonJS** module system (`require`/`module.exports`), not ES modules.
 - **Error tuple pattern**: Async functions return `[errors, result]` via the `catchErrors` wrapper from `puffy`.
+- **Pure write rules**: What is written to the AWS files is decided in pure functions (`src/aws/transforms.js`, `src/ini.js`, the block helpers in `src/shell.js`) and tested on strings. I/O stays in `src/aws/index.js`, `src/settings.js` and `src/shell.js`.
+- **Storage format changes**: If a change alters how `switch-profile` stores things in the user's AWS files, bump `FORMAT_VERSION` in `src/settings.js`, add the new version to the format history in that file, and add a migration (with backups) to `src/migrate.js`. Older versions then stop with a "run the latest version" message instead of misreading the files.
+- **Version stamps**: Sections written by the tool carry `switch_profile_version` (the CLI version), and the settings file records `lastWrittenBy`, to help diagnose user setups.
 - **Shebang**: `index.js` starts with `#!/usr/bin/env node` for direct CLI execution.
