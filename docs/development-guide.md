@@ -85,6 +85,8 @@ npm run test:dist   # build, then test/cli.js against dist/cli.js
 | `test/ini.js` | `src/ini.js`, including CRLF preservation |
 | `test/migrate.js` | `src/migrate.js` against a temporary `HOME` |
 | `test/core.js` | `catchErrors`/`wrapErrors` (error chains flattened outermost first) and `run` (fails on exit code, not on stderr) |
+| `test/home.js` | Home screen: the pure `nextFocus()` key rules, and the real prompt driven with simulated keys (switch, search, open actions, back to the list, Esc, no profiles) |
+| `test/navigation.js` | Home screen navigation decisions: `routeChoice()` (quit, switch, open a page) and `afterPage()` (exit after a switch, back on Esc, show expected errors, rethrow the rest) |
 | `test/ui.js` | `fit`, `ago`, `isInteractive` (never with `--no-input` or in CI), `CliError` hint and exit code |
 
 ### The fake AWS CLI
@@ -101,7 +103,7 @@ Your real `~/.aws` is never touched by the tests.
 
 ## Manual testing of interactive screens
 
-The picker, prompts and login screen need a real terminal (TTY), so they are not covered by `npm test`. Use the fake AWS CLI and a throwaway `HOME`:
+The home screen's keys are covered by `test/home.js` (it drives the real prompt with simulated keystrokes on a stream). The other prompts, the page navigation and the login screen need a real terminal (TTY), so they are not covered by `npm test`. Use the fake AWS CLI and a throwaway `HOME`:
 
 ```shell
 export TEST_HOME=$(mktemp -d)

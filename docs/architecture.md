@@ -23,10 +23,11 @@ switch-profile/
 │   ├── cli.js                # commander definitions, error and exit code handling
 │   ├── commands/
 │   │   ├── common.js         # preflight, loadState, CancelError/ask, describe, loginState
-│   │   ├── switch.js         # picker, connect (identity check + login), switchTo, sp offer
+│   │   ├── switch.js         # home screen loop, connect (identity check + login), switchTo, sp offer
 │   │   ├── login-flow.js     # the SSO login screen (device code, clipboard, QR, timer)
 │   │   └── index.js          # use, status, login, logout, add (+ SSO import), remove, settings
 │   ├── ui.js                 # colors (util.styleText), symbols, isInteractive, CliError, spinners
+│   ├── home.js               # the home screen prompt: search, profile list, always-visible action bar
 │   ├── rank.js               # fuzzy search (fuzzysort), frecency, PROD detection, query resolution
 │   ├── clipboard.js          # local clipboard tools, OSC 52, opening URLs
 │   ├── shell.js              # the sp shell block: function, completion, install/uninstall, env file handoff
@@ -42,8 +43,7 @@ switch-profile/
 └── test/
     ├── cli.js                # end-to-end, non-interactive, fake AWS CLI + temp HOME
     ├── fixtures/bin/aws      # the fake AWS CLI
-    ├── rank.js, clipboard.js, shell.js, login.js, transforms.js, ini.js, migrate.js
-    └── index.js              # placeholder
+    └── rank.js, home.js, navigation.js, clipboard.js, shell.js, login.js, transforms.js, ini.js, migrate.js, core.js, ui.js
 ```
 
 ## Entry point and bundle
@@ -58,8 +58,8 @@ switch-profile/
 | Library | Used for |
 |---------|----------|
 | `commander` 14 | Commands, options, help |
-| `@clack/prompts` | Inline prompts: autocomplete picker, select, confirm, text, password, multiselect, spinner, log lines |
-| `fuzzysort` | Picker search |
+| `@clack/prompts` | Inline prompts: select, confirm, text, password, multiselect, spinner, log lines. `@clack/core` (its base layer) powers the custom home screen |
+| `fuzzysort` | Home screen search |
 | `uqr` | QR code of the login URL |
 | Node `util.styleText` | Colors (no color library) |
 
@@ -81,9 +81,9 @@ It also sets `AWS_CLI_AGENT_TOOLKIT_HINT_DISABLED=true`, so `aws configure sso` 
 | File | Contents |
 |------|----------|
 | `common.js` | `preflight()` (AWS CLI v2 check, `runMigrations`, legacy SSO offer when interactive, rewrite of an outdated `sp` block), `loadState()` (profiles, default profile, settings), `ask()` (clack cancel to `CancelError`), `describe()` (role · account · region), `loginState()` (SSO status text and `needsLogin`), `loginKey()` (key of `settings.logins`). |
-| `switch.js` | `switchCommand` (default command), the status header and env warnings, `pick()` (clack autocomplete fed by `rank.rankProfiles`), `connect()` (identity check, login, retry), `switchTo()` (write default, record usage, hand to `sp`, warnings, output), `offerShortcut()`, `enableShortcut()`. |
+| `switch.js` | `switchCommand` (default command), `homeLoop()` (home screen, then a page per action and back; Esc in a page goes back, a switch ends the session; its decisions are the pure `routeChoice()` and `afterPage()`), the status header and env warnings, `pick()` (the home screen fed by `rank.rankProfiles`), `connect()` (identity check, login, retry), `switchTo()` (write default, record usage, hand to `sp`, warnings, output), `offerShortcut()`, `enableShortcut()`. |
 | `login-flow.js` | `ssoLogin()` (interactive login screen, or `plainLogin()` passthrough when non-interactive) and `rememberLogin()`. |
-| `index.js` | `use`, `status`, `login`, `logout`, `add` and `importFromSso`, `remove`, `settings`. Exports the command map used by `src/cli.js` and by the picker's actions. |
+| `index.js` | `use`, `status`, `login`, `logout`, `add` and `importFromSso`, `remove`, `settings`. Exports the command map used by `src/cli.js` and by the home screen's actions. |
 
 ### `src/ui.js`
 
@@ -91,6 +91,10 @@ Color helpers (off when stdout is not a TTY, `NO_COLOR`, `TERM=dumb`; on with `F
 
 - `spinner()`: clack's spinner on a TTY; a static stand-in in pipes, CI or with `ACCESSIBLE`.
 - `timerSpinner()`: an elapsed-time spinner that does not touch stdin, used by the login screen so it can read keypresses (clack's spinner exits the process on Ctrl+C).
+
+### `src/home.js`
+
+The home screen: a `HomePrompt` that extends `@clack/core`'s `AutocompletePrompt` (typing, text cursor, list navigation) with its own clack-style render and an action bar drawn below the list. Tab moves focus between the list and the bar; the pure `nextFocus()` holds the key rules, and the prompt's `key` listener runs after the base class's, so Enter on the bar overrides the profile the base picked. Resolves with a profile name, `ACTION_PREFIX + key`, or clack's cancel symbol. Accepts `input`/`output` streams so `test/home.js` can drive it with simulated keys.
 
 ### `src/rank.js`
 
@@ -133,7 +137,7 @@ sp (shell function)                 creates temp file, sets SWITCH_PROFILE_SHELL
           └─ switchCommand
               ├─ preflight          AWS CLI check, migrations, legacy SSO offer, sp block upkeep
               ├─ loadState          ~/.aws/config → transforms.listProfiles, [default] name, settings
-              ├─ rank.resolveQuery  exact or unique match? else header + pick() (clack autocomplete)
+              ├─ rank.resolveQuery  exact or unique match? else homeLoop(): header + home screen (src/home.js)
               └─ switchTo
                   ├─ connect        aws sts get-caller-identity
                   │                 fails + SSO → login-flow.ssoLogin → retry

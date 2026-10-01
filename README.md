@@ -11,21 +11,23 @@ npx switch-profile
 ```
 
 ```
-┌   switch-profile  2.0.0
+┌   switch-profile  2.1.0
 │
 │  ● acme-prod · Admin · 111111111111 · ap-southeast-2 · PROD · SSO ✓ auto-refresh · logged in 3h ago
 │
 ◆  Switch to · type a name, account, role or client
-│  Search: dev▌
-│  ● acme-dev        Admin     222222222222  ap-southeast-2   (used 2d ago)
+│  Search: dev█  (3 matches)
+│  ● acme-dev        Admin     222222222222  ap-southeast-2  used 2d ago
 │  ○ globex-dev      ReadOnly  333333333333  us-east-1
 │  ○ initech-dev     Admin     444444444444  eu-west-1
-└
+│
+│  [Log in] [Add] [Remove] [Log out] [Settings]
+└  ↑↓ choose · enter switch · tab actions · esc quit
 ```
 
 ## Why it's great
 
-- **Seconds, not minutes.** Fuzzy search across profile name, account ID, account name, role, client and region, with your most-used accounts first. `sp acme prod` switches without even opening the picker.
+- **Seconds, not minutes.** Fuzzy search across profile name, account ID, account name, role, client and region, with your most-used accounts first, and every other action one Tab away. `sp acme prod` switches without even opening the home screen.
 - **Logged in when you need it.** If a session has expired, it logs you in on the spot, then never again until the session ends: credentials refresh on their own in the AWS CLI, SDKs and Terraform.
 - **Every terminal on its own account.** With the `sp` shortcut, each terminal keeps its own `AWS_PROFILE`, plus tab-completion of your profile names.
 - **Made for remote machines.** On a server reached over SSH, the login code lands in your laptop's clipboard, or scan a QR code with your phone.
@@ -51,6 +53,7 @@ npx switch-profile
 - [Why it's great](#why-its-great)
 - [Built on AWS best practices](#built-on-aws-best-practices)
 - [Quick start](#quick-start)
+- [The home screen](#the-home-screen)
 - [Commands](#commands)
 - [Working on remote machines (SSH)](#working-on-remote-machines-ssh)
 - [Importing a client's accounts](#importing-a-clients-accounts)
@@ -90,11 +93,20 @@ sp acme prod       # fuzzy match: switches if exactly one profile matches
 
 No profiles yet? `switch-profile` starts the **Add profiles** flow. To import every account of your company's or client's SSO portal, see [Importing a client's accounts](#importing-a-clients-accounts).
 
+## The home screen
+
+Running `sp` (or `npx switch-profile`) with no arguments opens the home screen:
+
+- **Type and press Enter** to switch. That's the whole path for everyday use.
+- **Tab** moves to the action bar below the list, which is always visible however many profiles you have: **Log in**, **Add**, **Remove**, **Log out**, **Settings**. Use ←→ to choose and Enter to open.
+- **Every action opens as a page and comes back** to the home screen when it's done. **Esc** goes back from a page, and quits from the home screen.
+- A switch ends the session, which is what lets `sp` set `AWS_PROFILE` in your terminal.
+
 ## Commands
 
 | Command | What it does |
 |---------|--------------|
-| `switch-profile [profile...]` | Opens the picker. With words: an exact name or a unique fuzzy match switches directly; otherwise the picker opens pre-filtered (or exits 3 when non-interactive). |
+| `switch-profile [profile...]` | Opens the home screen (search and switch, plus the action bar). With words: an exact name or a unique fuzzy match switches directly; otherwise the home screen opens pre-filtered (or exits 3 when non-interactive). |
 | `use <profile>` | Switches to a profile by its exact name (no fuzzy matching). |
 | `status [--json]` | Shows the default profile, its login state, and what this terminal uses. |
 | `login [profile] [--device\|--browser]` | Starts a fresh login now, even if the session is still valid. Defaults to this terminal's `AWS_PROFILE`, then the default profile. |
@@ -176,6 +188,8 @@ AWS_PROFILE=acme-dev terraform plan
 
 ## Settings
 
+Open **Settings** from the home screen's action bar (Tab, then → to Settings), or run it directly:
+
 ```shell
 sp settings
 ```
@@ -243,7 +257,7 @@ The completion registers only if `compinit` ran before the `switch-profile` bloc
 
 ### Commands still use the wrong account
 
-`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in the environment override every profile, and `AWS_REGION` overrides the profile's region. The picker warns about them; switching with `sp` clears the credential variables (not the region).
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in the environment override every profile, and `AWS_REGION` overrides the profile's region. The home screen warns about them; switching with `sp` clears the credential variables (not the region).
 
 ### AWS CLI not found
 

@@ -62,7 +62,7 @@ Unexpected errors add `Run with --debug for details.`. `--debug` (or `SWITCH_PRO
 
 ## Startup (every command)
 
-`preflight()` in `src/commands/common.js` runs first (skipped for actions started from the picker, which already ran it):
+`preflight()` in `src/commands/common.js` runs first (skipped for actions started from the home screen, which already ran it):
 
 1. **AWS CLI check.** Missing: `✗ The AWS CLI is not installed.` with an install hint per OS. Version 1: refused.
 2. **Migrations** (`src/migrate.js`). A newer storage format stops the CLI with "run the latest version". A 1.x `[default]` is migrated with backups:
@@ -81,10 +81,10 @@ Unexpected errors add `Run with --debug for details.`. `--debug` (or `SWITCH_PRO
 
 `--json` suppresses these notices.
 
-## The picker (`switch-profile`, no arguments)
+## The home screen (`switch-profile`, no arguments)
 
 ```
-┌   switch-profile  2.0.0
+┌   switch-profile  2.1.0
 │
 │  ● acme-prod · Admin · 111111111111 · ap-southeast-2 · PROD · SSO ✓ auto-refresh · logged in 3h ago
 │  This terminal uses acme-dev (AWS_PROFILE)
@@ -94,17 +94,33 @@ Unexpected errors add `Run with --debug for details.`. `--debug` (or `SWITCH_PRO
 │
 ◆  Switch to · type a name, account, role or client
 │  Search: _
-│  ● acme-prod        Admin       111111111111  ap-southeast-2  PROD  (current default)
+│  ● acme-prod        Admin       111111111111  ap-southeast-2  PROD  current default
 │  ○ acme-dev         Admin       222222222222  ap-southeast-2
 │  ○ globex-readonly  ReadOnly    333333333333  us-east-1       PROD
 │  ○ sandbox          access keys               us-west-2
-│  ○ + Add profiles
-│  ○ ↻ Log in again
-│  ○ − Remove profiles
-│  ○ ⏻ Log out
-│  ○ ⚙ Settings
-└
+│
+│  [Log in] [Add] [Remove] [Log out] [Settings]
+└  ↑↓ choose · enter switch · tab actions · esc quit
 ```
+
+The home screen is a custom prompt (`src/home.js`, built on `@clack/core`'s `AutocompletePrompt`): a search box, the profile list, and an action bar that is always drawn below the list, however many profiles there are.
+
+### Keys
+
+| Focus | Keys |
+|-------|------|
+| List (default) | Type to search, `↑` `↓` choose, `Enter` switch, `Tab` go to the action bar, `Esc` quit |
+| Action bar | `←` `→` choose an action, `Enter` open it, `Tab`, `↑` `↓` or typing go back to the list, `Esc` quit |
+
+When there are no rows (no match, or no profiles), the focus moves to the action bar.
+
+### Navigation
+
+- **Actions open as pages.** The home screen collapses to a breadcrumb (`◇  switch-profile › Settings`), the page runs, then the home screen comes back with a fresh status line and profile list.
+- **Esc inside a page goes back** (`└  ← Back`) to the home screen. Errors inside a page are printed and also return to the home screen.
+- **Esc on the home screen quits** (`└  Bye 👋`, exit 0).
+- **A successful switch ends the session**, also when it happens inside a page (e.g. "Switch to it now?" after adding a profile): `sp` can only set `AWS_PROFILE` once the process exits.
+- The environment-variable warning is shown on the first home screen only.
 
 ### Status header
 
@@ -126,18 +142,17 @@ Unexpected errors add `Run with --debug for details.`. `--debug` (or `SWITCH_PRO
 
 - Typing filters with fuzzy matching (`fuzzysort`) across name, account name, account id, role, SSO session (client) and region. Multiple words narrow the results (`acme prod`).
 - Without a query: current default first, then frecency (use count × recency weight, from `settings.usage`), then config file order.
-- With a query: match quality, with a small frecency bonus.
-- The actions at the bottom are also matched by their label (`log` shows Log in again and Log out).
+- With a query: match quality, with a small frecency bonus. When the list changes, the focus stays on the same profile if it is still listed.
 
 ### Actions
 
 | Action | Runs |
 |--------|------|
-| Add profiles | `add` |
-| Log in again | `login` for the default profile |
-| Remove profiles | `remove` |
+| Log in | `login` for the default profile (a fresh session, even if the current one is valid) |
+| Add | `add` |
+| Remove | `remove` |
 | Log out | `logout` |
-| Settings | `settings` |
+| Settings | `settings` ("Done" returns to the home screen) |
 
 No profiles at all: `No AWS profiles yet. Let's add your first one ✨` and the `add` menu opens. Non-interactive: exit 3.
 
@@ -147,7 +162,7 @@ Words are joined into one query (`rank.resolveQuery`):
 
 1. An exact name (case-insensitive) switches directly.
 2. Otherwise, if exactly one profile matches the fuzzy search, it switches directly.
-3. Otherwise the picker opens with the query pre-filled. Non-interactive: exit 3, with up to five candidates in the hint (`"acme" matches 2 profiles.` / `Be more specific: acme-prod, acme-dev`), or `No profile matches "x".`
+3. Otherwise the home screen opens with the query pre-filled. Non-interactive: exit 3, with up to five candidates in the hint (`"acme" matches 2 profiles.` / `Be more specific: acme-prod, acme-dev`), or `No profile matches "x".`
 
 Without arguments, non-interactive runs exit 3: `Which profile? Pass its name.`
 
@@ -253,7 +268,7 @@ When a login is needed, the last line reads `Run sp login to log in again.`
 
 Starts a fresh login now, even if the session is valid.
 
-- Target: the argument, else `AWS_PROFILE`, else the default profile (from the picker: the default profile). None: exit 3.
+- Target: the argument, else `AWS_PROFILE`, else the default profile (from the home screen: the default profile). None: exit 3.
 - SSO profile: the [login screen](#the-login-screen). `--device`/`--browser` override the setting for this run.
 - Console sign-in, or a role whose source is SSO/console sign-in: forced login through the same path as a switch.
 - Keys or credential process: exit 3, `nothing to log in to`.

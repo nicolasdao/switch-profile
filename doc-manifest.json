@@ -19,6 +19,7 @@
         "Built on AWS best practices",
         "Table of Contents",
         "Quick start",
+        "The home screen",
         "Commands",
         "Working on remote machines (SSH)",
         "Importing a client's accounts",
@@ -39,7 +40,7 @@
         "Documentation",
         "License"
       ],
-      "line_count": 267,
+      "line_count": 281,
       "links_to": [
         "docs/architecture.md",
         "docs/aws-profile-management.md",
@@ -72,6 +73,7 @@
         "`src/cli.js`",
         "`src/commands/`",
         "`src/ui.js`",
+        "`src/home.js`",
         "`src/rank.js`",
         "`src/clipboard.js`",
         "`src/shell.js`",
@@ -82,7 +84,7 @@
         "Data flow: `sp acme prod`",
         "Data flow: `sp add` (import)"
       ],
-      "line_count": 159,
+      "line_count": 163,
       "links_to": [
         "docs/aws-profile-management.md",
         "docs/cli-interface.md",
@@ -171,7 +173,9 @@
         "Interactive vs non-interactive",
         "Errors",
         "Startup (every command)",
-        "The picker (`switch-profile`, no arguments)",
+        "The home screen (`switch-profile`, no arguments)",
+        "Keys",
+        "Navigation",
         "Status header",
         "Rows",
         "Search and order",
@@ -188,7 +192,7 @@
         "`settings`",
         "Visual conventions"
       ],
-      "line_count": 366,
+      "line_count": 381,
       "links_to": [],
       "over_size": false,
       "parse_error": null,
@@ -276,7 +280,7 @@
         "Release",
         "Conventions"
       ],
-      "line_count": 151,
+      "line_count": 153,
       "links_to": [],
       "over_size": false,
       "parse_error": null,

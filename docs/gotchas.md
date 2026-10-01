@@ -60,11 +60,11 @@ Terminals opened before `sp` was set up do not have it until you open a new one 
 
 ### `sp` does not make `[default]` per-terminal
 
-`sp` still updates `[default]` like any switch; it adds `AWS_PROFILE` to the current terminal. Terminals without `AWS_PROFILE`, and processes started outside a terminal (IDE plugins, cron, GUI tools), follow the last switch made anywhere. The picker shows `This terminal uses X` when the terminal's `AWS_PROFILE` differs from `[default]`.
+`sp` still updates `[default]` like any switch; it adds `AWS_PROFILE` to the current terminal. Terminals without `AWS_PROFILE`, and processes started outside a terminal (IDE plugins, cron, GUI tools), follow the last switch made anywhere. The home screen shows `This terminal uses X` when the terminal's `AWS_PROFILE` differs from `[default]`.
 
 ### Environment variables that override profiles
 
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` win over `AWS_PROFILE` in the AWS CLI and boto3 (the JS SDK ignores them when a profile is set, so tools disagree). boto3 also reads `AWS_DEFAULT_PROFILE` before `AWS_PROFILE`. The picker warns about all four, and **`sp` unsets them** after a switch. Without `sp`, unset them yourself.
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` win over `AWS_PROFILE` in the AWS CLI and boto3 (the JS SDK ignores them when a profile is set, so tools disagree). boto3 also reads `AWS_DEFAULT_PROFILE` before `AWS_PROFILE`. The home screen warns about all four, and **`sp` unsets them** after a switch. Without `sp`, unset them yourself.
 - `AWS_REGION` and `AWS_DEFAULT_REGION` override the profile's region. They are **not cleared** (a region pinned on purpose is legitimate); the switch prints a warning when they differ from the profile's region.
 
 ### LLM agents and automation
@@ -87,7 +87,7 @@ Prefixing also lets concurrent agents use different profiles. For agents: `switc
 
 ### A fuzzy match switches only when it is unique
 
-`sp acme prod` switches immediately only if the text is an exact profile name or exactly one profile matches. Matching covers names, account ids, account names, roles, SSO sessions and regions, so short words often match several profiles (`sp prod` may match every client's prod). In a terminal the picker then opens pre-filtered; in scripts the command exits 3 and lists candidates. Use `use <exact-name>` in scripts to avoid surprises.
+`sp acme prod` switches immediately only if the text is an exact profile name or exactly one profile matches. Matching covers names, account ids, account names, roles, SSO sessions and regions, so short words often match several profiles (`sp prod` may match every client's prod). In a terminal the home screen then opens pre-filtered; in scripts the command exits 3 and lists candidates. Use `use <exact-name>` in scripts to avoid surprises.
 
 ## Logins
 
@@ -152,4 +152,4 @@ The credentials refresh as long as the SSO login of `dev` is valid.
 
 ### clack autocomplete re-filters function options
 
-When `options` is a function, clack's `autocomplete` still filters the returned rows by substring of the typed text. The picker ranks and filters with `fuzzysort` already, so clack's filter would drop fuzzy matches (`acme prod` does not appear as a substring of `acme-prod`). The picker passes `filter: () => true`; keep it whenever options are pre-filtered.
+When `options` is a function, clack's `autocomplete` still filters the returned rows by substring of the typed text. The home screen ranks and filters with `fuzzysort` already, so clack's filter would drop fuzzy matches (`acme prod` does not appear as a substring of `acme-prod`). The home screen uses `@clack/core`'s `AutocompletePrompt` directly, which does not filter function options, so this only matters if a future prompt goes back to `@clack/prompts`' `autocomplete`: pass `filter: () => true` whenever options are pre-filtered.

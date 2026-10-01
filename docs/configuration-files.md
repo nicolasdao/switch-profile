@@ -101,7 +101,7 @@ The AWS CLI and SDKs ignore unknown keys.
 | `switch_profile_name` | `[default]` only | Profile last selected. This is how the tool knows the current default. |
 | `switch_profile_version` | Sections it writes | CLI version that last wrote the section, for diagnosis |
 | `switch_profile_generated` | Profiles created by the SSO import | Name of the `[sso-session]` they came from. Only these profiles can be pruned. |
-| `switch_profile_account_name` | Profiles created by the SSO import | Account name from the portal. Shown in the picker, searchable, and used for `PROD` detection. |
+| `switch_profile_account_name` | Profiles created by the SSO import | Account name from the portal. Shown in the home screen, searchable, and used for `PROD` detection. |
 
 ### How `switch-profile` changes this file
 
@@ -174,7 +174,7 @@ Managed by the AWS CLI. Files are named `sha1(<session name>).json` for `[sso-se
 
 | Use | How |
 |-----|-----|
-| Login state in the picker and `status` | Every file whose `startUrl` host matches: `refreshToken` with a valid registration → `auto-refresh`; else latest `expiresAt` more than 2 minutes away → `N min left`; else `expired`; no match → `not logged in` |
+| Login state in the home screen and `status` | Every file whose `startUrl` host matches: `refreshToken` with a valid registration → `auto-refresh`; else latest `expiresAt` more than 2 minutes away → `N min left`; else `expired`; no match → `not logged in` |
 | SSO import | Reads `sha1(<session>).json` directly and uses `accessToken` (must be valid for another minute) for `aws sso list-accounts` and `list-account-roles` |
 
 Whether a profile actually works is decided by `aws sts get-caller-identity` at switch time, not by this cache. `~/.aws/cli/cache/` (read by 1.x) is not used.
@@ -213,7 +213,7 @@ The tool's own state. Created on the first run. Written with a plain (non-atomic
 | `perTerminalPrompted` | The one-time `sp` offer was answered (or Settings was used) |
 | `ssoUpgradeDeclined` | The legacy SSO upgrade was declined; not asked at startup again |
 | `loginMode` | `auto` (default), `device` or `browser` |
-| `usage` | Per profile: switch count and last use. Drives the picker order (frecency) and `used Xh ago`. |
+| `usage` | Per profile: switch count and last use. Drives the home screen order (frecency) and `used Xh ago`. |
 | `logins` | Last successful login per key (`sso_session`, else start URL, else profile name). Shown as `logged in Xh ago`. Cleared by `logout`. |
 | `awsCli` | Cached `aws --version`, keyed by the resolved binary path and its mtime. Avoids starting Python (0.5 to 1 s) on every run. |
 

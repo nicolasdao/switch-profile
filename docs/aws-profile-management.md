@@ -44,7 +44,7 @@ Every write to `~/.aws/config` and `~/.aws/credentials` is atomic: the content g
 
 `transforms.listProfiles(config)` returns every section except `[default]` and `[sso-session …]`, resolving `sso_start_url`/`sso_region` from the referenced `[sso-session]`. Each profile has a `kind`, checked in this order:
 
-| Kind | Detected by | Can log in | Picker label |
+| Kind | Detected by | Can log in | Home screen label |
 |------|-------------|-----------|--------------|
 | `sso` | `sso_start_url` (directly or via `sso_session`) | `aws sso login` | the role name |
 | `login` | `login_session` (console sign-in, `aws login`) | `aws login` | `console sign-in` |
@@ -63,7 +63,7 @@ Other fields: `name`, `region` (the profile's own, never the SSO region), `sso_a
 3. **`aws.setDefaultProfile(name)`** applies `transforms.setDefaultProfile()`:
    - `[default]` of `~/.aws/config` gets a copy of the profile's keys (minus `switch_profile_*` keys) plus `switch_profile_name` and `switch_profile_version`. Created at the top if missing.
    - `[default]` of `~/.aws/credentials` mirrors the profile's credentials section if it has one (keys profiles). Otherwise it is removed, because static keys there would override the settings in `~/.aws/config`.
-4. `settings.usage[name]` is incremented (`rank.recordUsage`), for the picker order.
+4. `settings.usage[name]` is incremented (`rank.recordUsage`), for the home screen order.
 5. `shell.exportProfile(name)` writes the name to `SWITCH_PROFILE_ENV_FILE` when launched through `sp`.
 
 Any identity check failure on a loginable profile triggers a login, not only expired tokens.
@@ -92,7 +92,7 @@ The mode comes from `--device`/`--browser`, else `settings.loginMode` (`auto` by
 
 ### Login state (`aws.getSsoLoginStatus(startUrl)`)
 
-Used by the picker header and `status`. Reads every `~/.aws/sso/cache/*.json` with an `accessToken` whose `startUrl` host matches:
+Used by the home screen header and `status`. Reads every `~/.aws/sso/cache/*.json` with an `accessToken` whose `startUrl` host matches:
 
 1. A token with a `refreshToken` whose `registrationExpiresAt` has not passed → `refreshable` (`SSO ✓ auto-refresh`).
 2. Otherwise the latest `expiresAt`: more than 2 minutes away → `active` (`SSO ✓ N min left`), else `expired`.
