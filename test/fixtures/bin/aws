@@ -43,6 +43,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 	if (args[0] == 'sso' && args[1] == 'logout') { fs.rmSync(cacheDir, { recursive:true, force:true }); return }
 	if (args[0] == 'sso' && args[1] == 'list-accounts') return console.log(JSON.stringify({ accountList:[{ accountId:'111111111111', accountName:'Prod Workloads' }, { accountId:'222222222222', accountName:'Dev' }, { accountId:'333333333333', accountName:'Security' }] }))
 	if (args[0] == 'sso' && args[1] == 'list-account-roles') { await sleep(150); const id = arg('--account-id'); return console.log(JSON.stringify({ roleList: id == '333333333333' ? [{ roleName:'ReadOnly' }] : [{ roleName:'Admin' }, { roleName:'ReadOnly' }] })) }
+	if (args[0] == 'configure' && args[1] == 'sso') { // what 'aws configure sso' writes once its prompts are answered
+		if (process.env.FAKE_CONFIGURE_FAIL) { console.error('\naws: [ERROR]: An error occurred (InvalidRequestException) when calling the RegisterClient operation:\n\nerror_description: Invalid start url provided'); process.exit(254) }
+		fs.appendFileSync(path.join(home, '.aws', 'config'), `\n[profile ${arg('--profile')}]\nsso_session = fake\nsso_account_id = 1\nsso_role_name = R\nregion = us-east-1\n\n[sso-session fake]\nsso_start_url = https://fake.awsapps.com/start\nsso_region = us-east-1\n`)
+		return
+	}
 	if (args[0] == 'configure' && args[1] == 'export-credentials') return console.log(JSON.stringify({ Version:1, AccessKeyId:'ASIA', SecretAccessKey:'s', SessionToken:'t' }))
 	console.error('fake aws: unsupported ' + args.join(' ')); process.exit(2)
 })()

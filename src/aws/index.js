@@ -379,12 +379,18 @@ const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region 
  * Creates an SSO profile with the interactive 'aws configure sso' flow, then stamps it. If the user skipped
  * the SSO session name (legacy format, no auto-refresh), the profile is upgraded to the [sso-session] format.
  *
+ * 'aws configure sso' logs in at the end, so it gets the same flags as 'aws sso login': over SSH (or on a
+ * machine without a display) it uses a device code instead of a browser callback that can never arrive.
+ *
+ * @param  {String}  name
+ * @param  {String}  options.loginMode	'auto' (default) | 'device' | 'browser'
  * @return {Boolean} upgraded		True if the profile had to be upgraded (the user will need to log in again).
  */
-const createSsoProfile = name => catchErrors((async () => {
+const createSsoProfile = (name, { loginMode } = {}) => catchErrors((async () => {
 	await awsCliV2Exists()
+	const flags = loginFlags(loginMode || 'auto', { env:process.env, platform:process.platform, cliVersion:await getAwsCliVersion() })
 	try {
-		await run('aws', ['configure', 'sso', '--profile', name], { tee:true })
+		await run('aws', ['configure', 'sso', '--profile', name, ...flags], { tee:true })
 	} catch(err) {
 		throw Object.assign(new Error(`'aws configure sso' failed: ${err.message}`, { cause:err }), { output:err.output || '' })
 	}

@@ -45,7 +45,7 @@ switch-profile/
     ├── cli.js                # end-to-end, non-interactive, fake AWS CLI + temp HOME
     ├── fixtures/bin/aws      # the fake AWS CLI
     ├── fixtures/setup.js     # loaded first (.mocharc.json): sends the log of in-process tests to a temp file
-    └── rank.js, home.js, navigation.js, clipboard.js, shell.js, login.js, transforms.js, ini.js, migrate.js, core.js, ui.js, log.js
+    └── rank.js, home.js, navigation.js, clipboard.js, shell.js, login.js, transforms.js, ini.js, migrate.js, core.js, ui.js, log.js, aws.js
 ```
 
 ## Entry point and bundle

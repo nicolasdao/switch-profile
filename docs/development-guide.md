@@ -86,6 +86,7 @@ npm run test:dist   # build, then test/cli.js against dist/cli.js
 | `test/transforms.js` | `[default]` rules, 1.x detection/stripping, legacy SSO upgrade, session names, profile listing and kinds, `populateSsoProfiles` (skip existing, stale and prune, naming and clashes) |
 | `test/ini.js` | `src/ini.js`, including CRLF preservation |
 | `test/migrate.js` | `src/migrate.js` against a temporary `HOME` |
+| `test/aws.js` | `aws.createSsoProfile` against a temporary `HOME` and the fake AWS CLI: device code flags over SSH, none in browser mode, AWS CLI output kept on failure |
 | `test/core.js` | `catchErrors`/`wrapErrors` (error chains flattened outermost first), `run` (fails on exit code, not on stderr; keeps command, exit code and output on failure) and `lastErrorLine` |
 | `test/log.js` | `src/log.js`: redaction, full error chains, file format, tolerated failures, rotation, never throwing, `~` display path |
 | `test/home.js` | Home screen: the pure `nextFocus()` key rules, and the real prompt driven with simulated keys (switch, search, open actions, back to the list, Esc, no profiles) |

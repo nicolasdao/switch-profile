@@ -178,7 +178,7 @@ const add = async (args, opts) => {
 			`${ui.dim('3.')} the SSO region ${ui.dim('(where IAM Identity Center lives, not where you deploy)')}`,
 			...(sessions.length ? [ui.dim(`Portals already set up: ${sessions.map(x => `${x.name} (${x.sso_region || '?'})`).join(', ')}. Type one of these names to reuse it.`)] : [])
 		].join('\n'))
-		const [errors, upgraded] = await aws.createSsoProfile(name)
+		const [errors, upgraded] = await aws.createSsoProfile(name, { loginMode:settings.getLoginMode(state.settings) })
 		if (errors) {
 			const failed = errors.find(e => e.output != null)
 			if (!failed)

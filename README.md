@@ -251,7 +251,7 @@ The SSO login is missing or expired. Run `sp login` (or just switch to the profi
 
 ### SSO login hangs on a remote machine
 
-The AWS CLI is waiting for a browser on the remote machine. Run `sp login --device`, or set **Settings > SSO login** to always use a device code.
+The AWS CLI is waiting for a browser on the remote machine. Run `sp login --device`, or set **Settings > SSO login** to always use a device code. Since 2.3.1, `sp add` > A single SSO profile also uses a device code automatically over SSH; with an older version, press Ctrl+C and update (`sp` always runs the latest).
 
 ### The code is not in my clipboard over SSH
 
