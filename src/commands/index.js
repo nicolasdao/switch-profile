@@ -2,13 +2,14 @@
  * Every command except the default switch flow (see ./switch.js).
  */
 const p = require('@clack/prompts')
+const log = require('../log')
 const aws = require('../aws')
 const transforms = require('../aws/transforms')
 const settings = require('../settings')
 const shell = require('../shell')
 const migrate = require('../migrate')
 const rank = require('../rank')
-const { resolveLoginMode, isRemoteSession } = require('../aws/login')
+const { resolveLoginMode, isRemoteSession, configureSsoFailure } = require('../aws/login')
 const ui = require('../ui')
 const { ask, preflight, loadState, loginKey, describe, loginState, upgradeLegacySso } = require('./common')
 const { ssoLogin, rememberLogin } = require('./login-flow')
@@ -55,7 +56,7 @@ const status = async (args, opts) => {
 	await begin(opts)
 	const state = await loadState()
 	const terminal = process.env.AWS_PROFILE || null
-	const shortcut = await shell.getStatus(settings.CLI_VERSION).catch(() => null)
+	const shortcut = await shell.getStatus(settings.CLI_VERSION).catch(log.tolerated('reading the sp shortcut status', null))
 	const d = state.defaultProfile
 	const login = d ? await loginState(d, state) : { text:null, needsLogin:false }
 
@@ -166,22 +167,32 @@ const add = async (args, opts) => {
 	const name = await ask(p.text({ message:'Profile name', placeholder:'e.g. acme-prod', validate:validateProfileName(taken) }))
 
 	if (kind == 'sso') {
+		const [configErrors, configStr] = await aws.getConfigFile()
+		if (configErrors)
+			throw ui.cliErrorFrom(configErrors)
+		const sessions = transforms.listSsoSessions(configStr)
 		p.log.message([
 			'Handing over to aws configure sso. You will be asked for:',
-			`${ui.dim('1.')} a session name ${ui.dim('(reuse the same one for every profile of a portal: one login covers them all)')}`,
+			`${ui.dim('1.')} a session name ${ui.dim('(a short name such as acme, not the URL; reuse the same one for every profile of a portal: one login covers them all)')}`,
 			`${ui.dim('2.')} the start URL ${ui.dim('(e.g. https://acme.awsapps.com/start)')}`,
-			`${ui.dim('3.')} the SSO region ${ui.dim('(where IAM Identity Center lives, not where you deploy)')}`
+			`${ui.dim('3.')} the SSO region ${ui.dim('(where IAM Identity Center lives, not where you deploy)')}`,
+			...(sessions.length ? [ui.dim(`Portals already set up: ${sessions.map(x => `${x.name} (${x.sso_region || '?'})`).join(', ')}. Type one of these names to reuse it.`)] : [])
 		].join('\n'))
 		const [errors, upgraded] = await aws.createSsoProfile(name)
-		if (errors)
-			throw new ui.CliError(ui.errorsMessage(errors))
+		if (errors) {
+			const failed = errors.find(e => e.output != null)
+			if (!failed)
+				throw ui.cliErrorFrom(errors)
+			const { message, hint } = configureSsoFailure(failed.output, sessions)
+			throw new ui.CliError(message, { hint, errors })
+		}
 		if (upgraded)
 			p.log.info(`No session name was given, so ${name} now uses an [sso-session] for auto-refresh. You'll log in once more.`)
 	} else if (kind == 'login') {
 		const region = await chooseRegion('Default region', 'us-east-1')
 		const [configErrors, configStr] = await aws.getConfigFile()
 		if (configErrors)
-			throw new ui.CliError(ui.errorsMessage(configErrors))
+			throw ui.cliErrorFrom(configErrors)
 		const ini = require('../ini')
 		await aws.writeAwsFile(aws.AWS_CONFIG_FILE, ini.setSection(configStr, `profile ${name}`, [['region', region], [transforms.VERSION_KEY, settings.CLI_VERSION]]))
 		p.log.step('Signing in with aws login…')
@@ -195,7 +206,7 @@ const add = async (args, opts) => {
 		const region = await chooseRegion('Default region', 'us-east-1')
 		const [errors] = await aws.createProfile({ name, aws_access_key_id, aws_secret_access_key, region })
 		if (errors)
-			throw new ui.CliError(ui.errorsMessage(errors))
+			throw ui.cliErrorFrom(errors)
 	}
 
 	p.log.success(`Profile ${ui.accent(name)} created`)
@@ -224,7 +235,7 @@ const importFromSso = async (state, opts) => {
 	const { interactive } = opts
 	let [configErrors, configStr] = await aws.getConfigFile()
 	if (configErrors)
-		throw new ui.CliError(ui.errorsMessage(configErrors))
+		throw ui.cliErrorFrom(configErrors)
 	const sessions = transforms.listSsoSessions(configStr)
 
 	let sessionName = opts.fromSso && opts.fromSso !== true ? opts.fromSso : null
@@ -281,7 +292,7 @@ const importFromSso = async (state, opts) => {
 	} catch(err) {
 		if (spin)
 			spin.error('Could not read the accounts')
-		throw new ui.CliError(`Could not list the accounts of ${sessionName}.`, { hint:String(err.message).trim().split('\n').slice(-1)[0] })
+		throw new ui.CliError(`Could not list the accounts of ${sessionName}.`, { hint:String(err.message).trim().split('\n').slice(-1)[0], cause:err })
 	}
 
 	const sessionRegions = state.profiles.filter(x => x.sso_session == sessionName && x.region).map(x => x.region)
@@ -366,7 +377,7 @@ const remove = async (names, opts) => {
 	}
 	const [errors] = await aws.deleteProfiles(names)
 	if (errors)
-		throw new ui.CliError(ui.errorsMessage(errors))
+		throw ui.cliErrorFrom(errors)
 	p.outro(`${ui.ok(ui.sym.ok)} Removed ${names.join(', ')}`)
 }
 

@@ -8,6 +8,7 @@ const { CLI_VERSION } = settings
 const transforms = require('./transforms')
 const { loginFlags, isRemoteSession, atLeast } = require('./login')
 const regions = require('./regions')
+const log = require('../log')
 
 const IS_WINDOWS = process.platform === 'win32'
 const NL = IS_WINDOWS ? '\n' : EOL
@@ -29,13 +30,13 @@ const getAwsCliVersion = async () => {
 		return _awsCliVersion
 	const path = await whichAws()
 	const stat = path ? await fs.promises.stat(fs.realpathSync(path)).catch(() => null) : null
-	const cached = (await settings.read().catch(() => ({}))).awsCli
+	const cached = (await settings.read().catch(log.tolerated('reading the settings', {}))).awsCli
 	if (stat && cached && cached.path == path && cached.mtimeMs == stat.mtimeMs && cached.version)
 		return (_awsCliVersion = cached.version)
 	const data = await exec('aws --version') || ''
 	_awsCliVersion = ((data.match(/aws-cli\/(\S+)/)||[])[1]) || null
 	if (stat && _awsCliVersion)
-		await settings.update({ awsCli: { path, mtimeMs:stat.mtimeMs, version:_awsCliVersion } }).catch(() => null)
+		await settings.update({ awsCli: { path, mtimeMs:stat.mtimeMs, version:_awsCliVersion } }).catch(log.tolerated('caching the AWS CLI version', null))
 	return _awsCliVersion
 }
 
@@ -221,7 +222,7 @@ const awsLogin = async profile => {
 	if (!atLeast(version, [2, 32, 0]))
 		throw new Error(`'aws login' needs AWS CLI 2.32 or later (you have ${version}). Update the AWS CLI and try again.`)
 	const remote = isRemoteSession(process.env, process.platform) ? ['--remote'] : []
-	await run('aws', ['login', '--profile', profile, ...remote], { inherit:true })
+	await run('aws', ['login', '--profile', profile, ...remote], { tee:true })
 }
 
 /**
@@ -230,7 +231,7 @@ const awsLogin = async profile => {
 const logoutAll = async () => {
 	await run('aws', ['sso', 'logout'])
 	if (atLeast(await getAwsCliVersion(), [2, 32, 0]))
-		await run('aws', ['logout', '--all']).catch(() => null)
+		await run('aws', ['logout', '--all']).catch(log.tolerated('aws logout --all', null))
 }
 
 /**
@@ -383,9 +384,9 @@ const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region 
 const createSsoProfile = name => catchErrors((async () => {
 	await awsCliV2Exists()
 	try {
-		await run('aws', ['configure', 'sso', '--profile', name], { inherit:true })
+		await run('aws', ['configure', 'sso', '--profile', name], { tee:true })
 	} catch(err) {
-		throw new Error(`'aws configure sso' failed (${err.message}). The SSO profile may not have been created correctly.`, { cause:err })
+		throw Object.assign(new Error(`'aws configure sso' failed: ${err.message}`, { cause:err }), { output:err.output || '' })
 	}
 
 	const [configStrErrors, configStr] = await getConfigFile()

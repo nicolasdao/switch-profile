@@ -11,6 +11,7 @@ const settings = require('../settings')
 const shell = require('../shell')
 const rank = require('../rank')
 const ui = require('../ui')
+const log = require('../log')
 const { ask, preflight, loadState, loginKey, describe, loginState, CancelError } = require('./common')
 const { ssoLogin } = require('./login-flow')
 const { home, ACTION_PREFIX } = require('../home')
@@ -121,7 +122,7 @@ const connect = async (profile, state, { interactive, quiet, force }) => {
 	const loginProfile = profile.kind == 'role' && profile.source_profile ? state.profiles.find(x => x.name == profile.source_profile) : profile
 	const canLogin = loginProfile && (loginProfile.kind == 'sso' || loginProfile.kind == 'login')
 	if (!canLogin)
-		throw new ui.CliError(`Could not get credentials for ${profile.name}.`, { hint: firstLine(result.message) })
+		throw new ui.CliError(`Could not get credentials for ${profile.name}.`, { hint: firstLine(result.message), cause:result })
 	if (!interactive && !force)
 		throw new ui.CliError(`${profile.name} needs a login.`, { code:2, hint:`Run: switch-profile login ${loginProfile.name}` })
 
@@ -132,7 +133,7 @@ const connect = async (profile, state, { interactive, quiet, force }) => {
 
 	result = await tryIdentity()
 	if (result instanceof Error)
-		throw new ui.CliError(`Logged in, but ${profile.name} still has no access.`, { hint: firstLine(result.message) })
+		throw new ui.CliError(`Logged in, but ${profile.name} still has no access.`, { hint: firstLine(result.message), cause:result })
 	return result
 }
 
@@ -154,10 +155,10 @@ const doSwitch = async (profile, state, opts) => {
 
 	const [defaultErrors] = await aws.setDefaultProfile(profile.name)
 	if (defaultErrors)
-		throw new ui.CliError(ui.errorsMessage(defaultErrors))
+		throw ui.cliErrorFrom(defaultErrors)
 	const current = await settings.read()
 	await settings.update({ usage: rank.recordUsage(current.usage, profile.name) })
-	const terminal = await shell.exportProfile(profile.name).catch(() => false)
+	const terminal = await shell.exportProfile(profile.name).catch(log.tolerated('handing the profile to sp', false))
 
 	if (json) {
 		process.stdout.write(JSON.stringify({ profile:profile.name, account:identity.account, arn:identity.arn, region:profile.region || null, default:true, terminal }) + '\n')
@@ -191,7 +192,7 @@ const exportHint = name => process.platform == 'win32'
  * (once) to install the shortcut.
  */
 const offerShortcut = async profile => {
-	const status = await shell.getStatus(settings.CLI_VERSION).catch(() => null)
+	const status = await shell.getStatus(settings.CLI_VERSION).catch(log.tolerated('reading the sp shortcut status', null))
 	const hint = `${ui.dim('To use it in this terminal only, run:')}\n   ${ui.accent(exportHint(profile.name))}`
 	if (status && status.installed) {
 		p.outro(`${hint}\n${ui.dim(`Tip: switch with ${ui.accent(shell.FUNCTION_NAME)} and this happens automatically. Not found? Run ${status.shell.reload} or open a new terminal.`)}`)
@@ -282,8 +283,10 @@ const homeLoop = async (state, opts, initialQuery) => {
 			throw error
 		if (next == 'back')
 			p.cancel(ui.dim(`${ui.unicode ? '←' : '<-'} Back`))
-		if (next == 'error')
+		if (next == 'error') {
+			log.error(`${route.key} failed (back to the home screen)`, error)
 			ui.printError(error)
+		}
 		state = await loadState()
 	}
 }

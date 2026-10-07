@@ -122,4 +122,17 @@ region = us-west-2
 		assert.equal(run(['logout', '--yes']).code, 0)
 		assert.equal(run(['acme-dev']).code, 2)
 	})
+
+	it('Should log every run, AWS CLI call and error to ~/.switch-profile/switch-profile.log', () => {
+		const r = run(['use', 'no-such-profile'])
+		assert.equal(r.code, 3)
+		const text = fs.readFileSync(join(home, '.switch-profile', 'switch-profile.log'), 'utf8')
+		assert.match(text, /INFO {2}run switch-profile \d+\.\d+\.\d+ use no-such-profile/)
+		assert.match(text, /exec aws --version → ok in \d+ms|exec which aws/)
+		assert.match(text, /ERROR use failed\n {2}CliError: .*no-such-profile/)
+		assert.include(text, 'exit 3')
+		// Earlier tests in this HOME: the non-interactive login, and the tolerated 'aws logout --all' failure.
+		assert.match(text, /exec aws sso login --profile acme-dev --use-device-code --no-browser → ok in \d+ms/)
+		assert.include(text, 'WARN  aws logout --all failed (ignored)')
+	})
 })

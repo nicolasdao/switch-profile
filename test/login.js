@@ -1,5 +1,5 @@
 const { assert } = require('chai')
-const { loginFlags, resolveLoginMode, parseLoginOutput } = require('../src/aws/login')
+const { loginFlags, resolveLoginMode, parseLoginOutput, configureSsoFailure } = require('../src/aws/login')
 
 describe('login', () => {
 	const ssh = { SSH_CONNECTION:'1.2.3.4 5 6.7.8.9 22' }
@@ -30,5 +30,18 @@ describe('login', () => {
 			url: 'https://device.sso.us-east-1.amazonaws.com/', code: null, completeUrl: null
 		})
 		assert.deepEqual(parseLoginOutput(''), { url:null, code:null, completeUrl:null })
+	})
+
+	it('Should explain a wrong SSO region behind aws configure sso\'s invalid start URL error', () => {
+		const output = '\naws: [ERROR]: An error occurred (InvalidRequestException) when calling the RegisterClient operation:\n\nAdditional error details:\nerror: invalid_request\nerror_description: Invalid start url provided\n'
+		const sessions = [{ name:'goanna', sso_region:'ap-southeast-2', sso_start_url:'https://goanna.awsapps.com/start' }]
+		const r = configureSsoFailure(output, sessions)
+		assert.equal(r.message, 'aws configure sso failed: Invalid start url provided')
+		assert.include(r.hint, 'SSO region is most likely wrong')
+		assert.include(r.hint, 'goanna (ap-southeast-2, https://goanna.awsapps.com/start)')
+		const other = configureSsoFailure('aws: [ERROR]: Something else broke', [])
+		assert.equal(other.message, 'aws configure sso failed: Something else broke')
+		assert.equal(other.hint, 'Run sp add to try again.')
+		assert.equal(configureSsoFailure('', []).message, 'aws configure sso failed.')
 	})
 })

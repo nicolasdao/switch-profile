@@ -1,5 +1,5 @@
 const { assert } = require('chai')
-const { catchErrors, wrapErrors, run } = require('../src/core')
+const { catchErrors, wrapErrors, run, lastErrorLine } = require('../src/core')
 
 describe('core', () => {
 	it('Should resolve successes as [null, value]', async () => {
@@ -29,4 +29,19 @@ describe('core', () => {
 			assert.equal(err.message, 'bad thing')
 		}
 	}).timeout(15000)
+
+	it('Should keep the command, exit code and full output on a failed run', async () => {
+		const err = await run(process.execPath, ['-e', 'console.error("line 1\\nline 2\\nline 3\\nerror: invalid_request\\nerror_description: Invalid start url provided"); process.exit(252)']).catch(e => e)
+		assert.equal(err.message, 'error: invalid_request\nerror_description: Invalid start url provided')
+		assert.equal(err.code, 252)
+		assert.include(err.command, process.execPath)
+		assert.include(err.output, 'line 1')
+	}).timeout(15000)
+
+	it('Should pick the telling lines of a failed command\'s output', () => {
+		assert.equal(lastErrorLine(''), '')
+		assert.equal(lastErrorLine('short\noutput'), 'short\noutput')
+		assert.equal(lastErrorLine('a\nb\nc\nAn error occurred (X)\nd'), 'An error occurred (X)')
+		assert.equal(lastErrorLine('a\nb\nc\nd'), 'a\nb\nc\nd')
+	})
 })

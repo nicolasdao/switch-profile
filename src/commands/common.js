@@ -3,6 +3,7 @@
  * the current state (profiles, default profile, settings).
  */
 const p = require('@clack/prompts')
+const log = require('../log')
 const aws = require('../aws')
 const settings = require('../settings')
 const shell = require('../shell')
@@ -37,7 +38,7 @@ const INSTALL_HINTS = {
 const preflight = async ({ interactive, quiet }) => {
 	const [cliErrors, cliExists] = await aws.awsCliV2Exists(true)
 	if (cliErrors)
-		throw new ui.CliError(ui.errorsMessage(cliErrors), { hint:'switch-profile needs AWS CLI v2.' })
+		throw ui.cliErrorFrom(cliErrors, { hint:'switch-profile needs AWS CLI v2.' })
 	if (!cliExists)
 		throw new ui.CliError('The AWS CLI is not installed.', { hint: INSTALL_HINTS[process.platform] || INSTALL_HINTS.linux })
 
@@ -46,7 +47,7 @@ const preflight = async ({ interactive, quiet }) => {
 		result = await migrate.runMigrations()
 	} catch(err) {
 		if (err instanceof migrate.NewerFormatError)
-			throw new ui.CliError(err.message)
+			throw new ui.CliError(err.message, { cause:err })
 		throw err
 	}
 	if (result.migrated && !quiet)
@@ -73,7 +74,7 @@ const preflight = async ({ interactive, quiet }) => {
 		}
 	}
 
-	const status = await shell.getStatus(settings.CLI_VERSION).catch(() => null)
+	const status = await shell.getStatus(settings.CLI_VERSION).catch(log.tolerated('reading the sp shortcut status', null))
 	if (status && status.installed && status.outdated) {
 		const updated = await shell.install(settings.CLI_VERSION).then(() => true, () => false)
 		if (updated && !quiet)
@@ -96,10 +97,10 @@ const upgradeLegacySso = async names => {
 const loadState = async () => {
 	const [listErrors, profiles] = await aws.listProfiles()
 	if (listErrors)
-		throw new ui.CliError(ui.errorsMessage(listErrors))
+		throw ui.cliErrorFrom(listErrors)
 	const [defaultErrors, info] = await aws.getDefaultProfile()
 	if (defaultErrors)
-		throw new ui.CliError(ui.errorsMessage(defaultErrors))
+		throw ui.cliErrorFrom(defaultErrors)
 	const defaultProfile = profiles.find(x => x.name == info.profile) || null
 	return { profiles, defaultName: defaultProfile ? defaultProfile.name : null, defaultProfile, settings: await settings.read() }
 }

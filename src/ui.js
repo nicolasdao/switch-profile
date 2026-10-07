@@ -5,6 +5,7 @@
  * is set, or TERM=dumb. FORCE_COLOR forces them on.
  */
 const { styleText } = require('node:util')
+const log = require('./log')
 
 const env = process.env
 
@@ -71,13 +72,21 @@ const isInteractive = options => {
  * 	exit codes: 1 general, 2 login required, 3 bad input / not found, 130 cancelled
  */
 class CliError extends Error {
-	constructor(message, { hint, code, cause } = {}) {
+	constructor(message, { hint, code, cause, errors } = {}) {
 		super(message)
+		this.name = 'CliError'
 		this.hint = hint
 		this.exitCode = code || 1
 		this.cause = cause
+		this.errors = errors
 	}
 }
+
+/**
+ * A CliError from the [errors] arrays returned by catchErrors (src/core.js). The original errors stay attached,
+ * so the log (src/log.js) records their stacks and output, not just the message.
+ */
+const cliErrorFrom = (errors, options) => new CliError(errorsMessage(errors), { ...options, errors })
 
 const debugEnabled = () => !!(env.SWITCH_PROFILE_DEBUG || (env.DEBUG && /switch-profile|\*/.test(env.DEBUG)))
 
@@ -95,8 +104,9 @@ const printError = err => {
 		lines.push(`  ${ui.dim(err.hint)}`)
 	if (debugEnabled() && err.stack)
 		lines.push(ui.dim(err.stack))
-	else if (!(err instanceof CliError))
-		lines.push(`  ${ui.dim('Run with --debug for details.')}`)
+	// Exit codes 2 (login required) and 3 (bad input) come with their own fix in the hint. They are logged too.
+	if (!(err instanceof CliError) || err.exitCode == 1)
+		lines.push(`  ${ui.dim(`Details: ${log.displayPath()}`)}`)
 	console.error(lines.join('\n'))
 }
 
@@ -193,5 +203,6 @@ module.exports = {
 	debugEnabled,
 	errorsMessage,
 	printError,
+	cliErrorFrom,
 	ago
 }

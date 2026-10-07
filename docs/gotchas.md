@@ -20,6 +20,7 @@ Pitfalls that are not obvious, for users first, then for maintainers.
     - [Account access manager needs `aws login`, not `aws sso login`](#account-access-manager-needs-aws-login-not-aws-sso-login)
     - [The clipboard over SSH depends on your terminal](#the-clipboard-over-ssh-depends-on-your-terminal)
     - [Log in again after the legacy SSO upgrade](#log-in-again-after-the-legacy-sso-upgrade)
+    - [`Invalid start url provided` means a wrong SSO region](#invalid-start-url-provided-means-a-wrong-sso-region)
 - [Shell support](#shell-support)
     - [zsh completion needs `compinit` first](#zsh-completion-needs-compinit-first)
     - [CMD on Windows is not supported](#cmd-on-windows-is-not-supported)
@@ -102,6 +103,10 @@ Over SSH, the device code is sent to your local clipboard with the OSC 52 escape
 ### Log in again after the legacy SSO upgrade
 
 After legacy SSO profiles are upgraded to `[sso-session]`, the AWS CLI stores the token under the session name instead of the start URL. The old login is not reused, so you log in once per session. The same happens when a new SSO profile is created without a session name and `switch-profile` adds one.
+
+### `Invalid start url provided` means a wrong SSO region
+
+`aws configure sso` (and `aws sso-oidc`) answer a correct start URL sent to the wrong SSO region with `InvalidRequestException … error_description: Invalid start url provided` (sometimes just `Invalid request`). It points at the URL, but the region is wrong: use the region of the IAM Identity Center instance. A trailing `/` on the start URL is fine. `switch-profile add` explains this and lists the regions of the portals already set up.
 
 ## Shell support
 

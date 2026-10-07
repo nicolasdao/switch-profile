@@ -88,7 +88,30 @@ const parseLoginOutput = text => {
 	return { url, code, completeUrl }
 }
 
+const WRONG_REGION = /Invalid start url|invalid_request|InvalidRequestException/i
+
+/**
+ * Explains a failed 'aws configure sso' (pure). AWS answers a start URL sent to the wrong SSO region with
+ * 'Invalid start url provided', which points users at the URL instead of the region.
+ *
+ * @param  {String} output		What the AWS CLI printed on stderr
+ * @param  {Array}  sessions	Existing [sso-session] sections: [{ name, sso_start_url, sso_region }]
+ * @return {Object} { message, hint }
+ */
+const configureSsoFailure = (output, sessions) => {
+	const lines = (output || '').split('\n').map(l => l.trim()).filter(Boolean)
+	const detail = (lines.filter(l => /error/i.test(l)).slice(-1)[0] || lines.slice(-1)[0] || '').replace(/^aws:\s*\[ERROR\]:\s*/i, '')
+	const description = ((output || '').match(/error_description:\s*(.+)/) || [])[1]
+	const known = (sessions || []).filter(s => s.sso_region).map(s => `${s.name} (${s.sso_region}, ${s.sso_start_url})`)
+	const reuse = known.length ? ` Portals already set up here: ${known.join(', ')}. Type one of these names as the session name to reuse it.` : ''
+	const message = `aws configure sso failed${description || detail ? `: ${(description || detail).trim()}` : '.'}`
+	if (WRONG_REGION.test(output || ''))
+		return { message, hint:`The SSO region is most likely wrong: it must be the region where IAM Identity Center lives (Identity Center console › Settings), not where you deploy. AWS reports a wrong region as an invalid start URL.${reuse}` }
+	return { message, hint:`Run sp add to try again.${reuse}` }
+}
+
 module.exports = {
+	configureSsoFailure,
 	isRemoteSession,
 	resolveLoginMode,
 	loginFlags,

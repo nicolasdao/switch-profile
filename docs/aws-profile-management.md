@@ -128,7 +128,7 @@ Used by the home screen header and `status`. Reads every `~/.aws/sso/cache/*.jso
 
 | Function | What it writes |
 |----------|----------------|
-| `aws.createSsoProfile(name)` | Runs `aws configure sso --profile <name>` (terminal inherited), then stamps the profile. If no session name was given (legacy format), upgrades it with `transforms.upgradeLegacySsoProfiles()` and returns `true` (one more login needed). |
+| `aws.createSsoProfile(name)` | Runs `aws configure sso --profile <name>` (terminal inherited, stderr also captured with `tee` so a failure carries the AWS CLI error as `output`), then stamps the profile. If no session name was given (legacy format), upgrades it with `transforms.upgradeLegacySsoProfiles()` and returns `true` (one more login needed). |
 | Console sign-in (in `add`) | `[profile <name>]` with `region` and `switch_profile_version`, then `aws login --profile <name>`, which adds the login settings. |
 | `aws.createProfile({ name, aws_access_key_id, aws_secret_access_key, region })` | `[profile <name>]` (`region`, `output = json`, stamp) in config and `[<name>]` (keys, stamp) in credentials. |
 

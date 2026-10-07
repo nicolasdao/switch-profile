@@ -30,6 +30,8 @@
         "Requirements",
         "Troubleshooting",
         "`invalid_grant` during an SSO login",
+        "`Invalid start url provided` when adding an SSO profile",
+        "Something failed and the message is not enough",
         "`Error loading SSO Token` or \"session has expired\"",
         "SSO login hangs on a remote machine",
         "The code is not in my clipboard over SSH",
@@ -40,7 +42,7 @@
         "Documentation",
         "License"
       ],
-      "line_count": 281,
+      "line_count": 291,
       "links_to": [
         "docs/architecture.md",
         "docs/aws-profile-management.md",
@@ -80,11 +82,12 @@
         "`src/settings.js`, `src/migrate.js`",
         "`src/aws/`",
         "`src/ini.js`, `src/core.js`",
+        "`src/log.js`",
         "Error handling",
         "Data flow: `sp acme prod`",
         "Data flow: `sp add` (import)"
       ],
-      "line_count": 163,
+      "line_count": 173,
       "links_to": [
         "docs/aws-profile-management.md",
         "docs/cli-interface.md",
@@ -192,8 +195,10 @@
         "`settings`",
         "Visual conventions"
       ],
-      "line_count": 386,
-      "links_to": [],
+      "line_count": 394,
+      "links_to": [
+        "docs/configuration-files.md"
+      ],
       "over_size": false,
       "parse_error": null,
       "path": "docs/cli-interface.md",
@@ -218,7 +223,7 @@
     },
     {
       "dangling": false,
-      "description": "Exact formats of the AWS files, the settings file and the shell block written by switch-profile.",
+      "description": "Exact formats of the AWS files, the settings and log files and the shell block written by switch-profile.",
       "has_frontmatter": true,
       "headings": [
         "Configuration Files",
@@ -234,13 +239,14 @@
         "`~/.aws/sso/cache/` (read-only)",
         "`~/.switch-profile/settings.json`",
         "Format versions",
+        "`~/.switch-profile/switch-profile.log`",
         "Shell startup file (managed block)",
         "Migrations and backups",
         "1.x `[default]` migration",
         "Legacy SSO upgrade",
         "INI helpers (`src/ini.js`)"
       ],
-      "line_count": 330,
+      "line_count": 367,
       "links_to": [],
       "over_size": false,
       "parse_error": null,
@@ -249,7 +255,8 @@
         "src/aws/transforms.js",
         "src/ini.js",
         "src/settings.js",
-        "src/shell.js"
+        "src/shell.js",
+        "src/log.js"
       ],
       "source_unresolved": [],
       "tags": [
@@ -280,7 +287,7 @@
         "Release",
         "Conventions"
       ],
-      "line_count": 153,
+      "line_count": 156,
       "links_to": [],
       "over_size": false,
       "parse_error": null,
@@ -322,6 +329,7 @@
         "Account access manager needs `aws login`, not `aws sso login`",
         "The clipboard over SSH depends on your terminal",
         "Log in again after the legacy SSO upgrade",
+        "`Invalid start url provided` means a wrong SSO region",
         "Shell support",
         "zsh completion needs `compinit` first",
         "CMD on Windows is not supported",
@@ -333,7 +341,7 @@
         "clack's spinner exits the process on Ctrl+C",
         "clack autocomplete re-filters function options"
       ],
-      "line_count": 155,
+      "line_count": 160,
       "links_to": [],
       "over_size": false,
       "parse_error": null,

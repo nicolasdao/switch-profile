@@ -16,6 +16,7 @@ const fs = require('fs')
 const { homedir } = require('os')
 const { join, dirname, basename } = require('path')
 const { run } = require('./core')
+const log = require('./log')
 
 const IS_WINDOWS = process.platform === 'win32'
 const IS_MAC = process.platform === 'darwin'
@@ -210,7 +211,7 @@ const _detectShell = async () => {
 		const files = []
 		for (const exe of ['pwsh', 'powershell']) {
 			const file = await run(exe, ['-NoProfile', '-NonInteractive', '-Command', '$PROFILE.CurrentUserAllHosts'])
-				.then(out => (out||'').trim()).catch(() => '')
+				.then(out => (out||'').trim()).catch(log.tolerated('reading the PowerShell profile path', ''))
 			if (file && !files.includes(file))
 				files.push(file)
 		}

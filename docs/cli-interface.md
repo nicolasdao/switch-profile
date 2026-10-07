@@ -58,7 +58,15 @@ With `--json`, results go to stdout as JSON. Errors raised as `CliError` (the ex
   List them with: switch-profile status --json
 ```
 
-Unexpected errors add `Run with --debug for details.`. `--debug` (or `SWITCH_PROFILE_DEBUG=1`, or `DEBUG=switch-profile`) prints the stack trace.
+Errors with exit code 1 (and anything unexpected) add a pointer to the log:
+
+```
+✗ aws configure sso failed: Invalid start url provided
+  The SSO region is most likely wrong: it must be the region where IAM Identity Center lives …
+  Details: ~/.switch-profile/switch-profile.log
+```
+
+Exit codes 2 and 3 come with their own fix in the hint and skip that line; they are logged too. Every run, AWS CLI call and error is recorded in the log (see [Configuration Files](configuration-files.md#switch-profileswitch-profilelog)). `--debug` (or `SWITCH_PROFILE_DEBUG=1`, or `DEBUG=switch-profile`) also prints the stack trace on screen.
 
 ## Startup (every command)
 
@@ -299,7 +307,7 @@ Interactive menu (non-interactive without `--from-sso`: exit 3):
 
 The last three ask for a profile name first (lowercase letters, numbers, `-`, `_`, at least 2 characters, not taken).
 
-- **A single SSO profile.** A short guide (session name to reuse per portal, start URL, SSO region), then `aws configure sso --profile <name>` takes over the terminal. If no session name was given, the profile is converted to an `[sso-session]` and you log in once more.
+- **A single SSO profile.** A short guide (a short session name to reuse per portal, not the URL; start URL; SSO region) that lists the portals already set up with their regions, then `aws configure sso --profile <name>` takes over the terminal. Its error output is shown as it arrives and captured: when it fails, the message is the AWS CLI's error, and `Invalid start url provided` gets a hint that the SSO region is most likely wrong, with the regions of the known portals. If no session name was given, the profile is converted to an `[sso-session]` and you log in once more.
 - **Console sign-in.** Pick a default region, then `aws login --profile <name>` (AWS CLI 2.32+). For accounts reached with `aws login` (for example IAM account access manager assignments), without long-lived keys.
 - **Access keys.** A warning (keys never expire, stored in plain text), a confirmation (default No), then key id, secret (masked) and region.
 

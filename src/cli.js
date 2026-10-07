@@ -4,6 +4,7 @@
 const { Command } = require('commander')
 const p = require('@clack/prompts')
 const ui = require('./ui')
+const log = require('./log')
 const { CLI_VERSION } = require('./settings')
 const { CancelError } = require('./commands/common')
 const commands = require('./commands')
@@ -34,10 +35,12 @@ const run = action => async (...args) => {
 		await action(...args.slice(0, -2), opts)
 	} catch(err) {
 		if (err instanceof CancelError) {
+			log.info('cancelled by the user')
 			p.cancel(`Cancelled ${ui.unicode ? '👋' : ''}`)
 			process.exitCode = 130
 			return
 		}
+		log.error(`${cmd.name()} failed`, err)
 		if (opts.json && err instanceof ui.CliError)
 			process.stderr.write(JSON.stringify({ error:err.message, hint:err.hint || null, code:err.exitCode }) + '\n')
 		else
@@ -46,7 +49,25 @@ const run = action => async (...args) => {
 	}
 }
 
+/**
+ * Last line of defence: anything that escapes run() (a crash in an event handler, a rejected promise nobody
+ * awaited) is logged and reported instead of dying with a bare stack trace.
+ */
+const crashed = err => {
+	log.error('unexpected crash', err)
+	try {
+		ui.printError(err instanceof Error ? err : new Error(String(err)))
+	} catch {
+		console.error(err)
+	}
+	process.exit(1)
+}
+
 const main = argv => {
+	log.start({ version:CLI_VERSION, argv })
+	process.on('uncaughtException', crashed)
+	process.on('unhandledRejection', crashed)
+	process.on('exit', code => log.info(`exit ${code}`))
 	const program = new Command()
 	program
 		.name('switch-profile')

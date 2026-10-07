@@ -11,6 +11,7 @@ const settings = require('../settings')
 const { parseLoginOutput, isRemoteSession, atLeast } = require('../aws/login')
 const clipboard = require('../clipboard')
 const ui = require('../ui')
+const log = require('../log')
 const { CancelError } = require('./common')
 
 const IS_WINDOWS = process.platform == 'win32'
@@ -38,6 +39,7 @@ const ssoLogin = async (target, { label, loginKey, interactive, loginMode }) => 
 	if (!interactive)
 		return plainLogin(args, label)
 
+	const started = Date.now()
 	const child = spawn('aws', args, { stdio:['ignore', 'pipe', 'pipe'], ...(IS_WINDOWS ? { shell:true } : {}) })
 	let output = ''
 	let shown = false
@@ -127,6 +129,7 @@ const ssoLogin = async (target, { label, loginKey, interactive, loginMode }) => 
 	})
 	clearTimeout(fallback)
 	cleanup()
+	log.command({ cmd:'aws', args, code: child.killed ? 'killed (cancelled)' : code, ms:Date.now() - started, output })
 
 	if (code === 0) {
 		if (spin)
@@ -147,7 +150,8 @@ const ssoLogin = async (target, { label, loginKey, interactive, loginMode }) => 
 	const lines = output.trim().split('\n').map(l => l.trim()).filter(Boolean)
 	const detail = (lines.filter(l => /error|exception|denied|invalid|expired|unable/i.test(l)).slice(-2).join('\n')) || lines.slice(-1)[0] || ''
 	throw new ui.CliError(`SSO login for ${label} failed.${detail ? `\n${detail}` : ''}`, {
-		hint: /invalid_grant|InvalidGrant/i.test(output) ? 'Check the SSO region of this profile: it must be the region of your IAM Identity Center, not where your resources live.' : 'Try again, or run with --debug.'
+		cause: Object.assign(new Error(`aws ${args.join(' ')} exited with code ${code}`), { output }),
+		hint: /invalid_grant|InvalidGrant/i.test(output) ? 'Check the SSO region of this profile: it must be the region of your IAM Identity Center, not where your resources live.' : `Try again. Details: ${log.displayPath()}`
 	})
 }
 
@@ -157,9 +161,13 @@ const ssoLogin = async (target, { label, loginKey, interactive, loginMode }) => 
 const plainLogin = async (args, label) => {
 	console.error(`Logging in to ${label}. Approve the request using the URL and code below.`)
 	await new Promise((resolve, reject) => {
+		const started = Date.now()
 		const child = spawn('aws', args, { stdio:['ignore', process.stderr, process.stderr], ...(IS_WINDOWS ? { shell:true } : {}) })
 		child.on('error', reject)
-		child.on('close', code => code === 0 ? resolve() : reject(new ui.CliError(`SSO login for ${label} failed.`, { code:2 })))
+		child.on('close', code => {
+			log.command({ cmd:'aws', args, code, ms:Date.now() - started, output:'(output passed through to stderr)' })
+			code === 0 ? resolve() : reject(new ui.CliError(`SSO login for ${label} failed.`, { code:2 }))
+		})
 	})
 }
 

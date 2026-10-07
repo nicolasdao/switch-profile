@@ -64,6 +64,8 @@ npx switch-profile
 - [Requirements](#requirements)
 - [Troubleshooting](#troubleshooting)
   - [`invalid_grant` during an SSO login](#invalid_grant-during-an-sso-login)
+  - [`Invalid start url provided` when adding an SSO profile](#invalid-start-url-provided-when-adding-an-sso-profile)
+  - [Something failed and the message is not enough](#something-failed-and-the-message-is-not-enough)
   - [`Error loading SSO Token` or "session has expired"](#error-loading-sso-token-or-session-has-expired)
   - [SSO login hangs on a remote machine](#sso-login-hangs-on-a-remote-machine)
   - [The code is not in my clipboard over SSH](#the-code-is-not-in-my-clipboard-over-ssh)
@@ -116,7 +118,7 @@ Running `sp` (or `npx switch-profile`) with no arguments opens the home screen:
 | `remove [profiles...] [--yes]` | Removes profiles (alias `rm`). The current default cannot be removed. |
 | `settings` | Per-terminal switching, SSO login mode, legacy SSO upgrade. |
 
-Global options: `--json`, `--no-input` (never prompt), `--debug` (show stack traces), `-v, --version`. In examples, `sp` and `switch-profile` are interchangeable; only `sp` changes the current terminal.
+Global options: `--json`, `--no-input` (never prompt), `--debug` (show stack traces), `-v, --version`. Every run, AWS CLI call and error is logged to `~/.switch-profile/switch-profile.log` (secrets redacted). In examples, `sp` and `switch-profile` are interchangeable; only `sp` changes the current terminal.
 
 See [CLI Interface](docs/cli-interface.md) for every screen.
 
@@ -235,6 +237,14 @@ The published package has no runtime dependencies: everything is bundled into on
 
 The SSO region is wrong. It must be the region of your IAM Identity Center instance, not the region you deploy to. Fix `sso_region` in the `[sso-session]` section of `~/.aws/config` (or remove the portal and add it again).
 
+### `Invalid start url provided` when adding an SSO profile
+
+The start URL is usually fine: AWS sends this error when the **SSO region** is wrong. Use the region where IAM Identity Center lives (Identity Center console › Settings), not where you deploy. If the portal is already set up, type its existing session name instead (`sp add` lists them with their regions).
+
+### Something failed and the message is not enough
+
+Open `~/.switch-profile/switch-profile.log`. It has every run, every AWS CLI call with its exit code and output, and every error with its full chain. Secrets are redacted, so you can share it.
+
 ### `Error loading SSO Token` or "session has expired"
 
 The SSO login is missing or expired. Run `sp login` (or just switch to the profile again: `switch-profile` logs in when needed). There is no need to recreate the profile.
@@ -271,7 +281,7 @@ The completion registers only if `compinit` ran before the `switch-profile` bloc
 - [Architecture](docs/architecture.md) — Module map, data flow and bundling of the switch-profile CLI.
 - [AWS Profile Management](docs/aws-profile-management.md) — Profile kinds, switching, SSO logins, SSO import, migrations and the sp shell function.
 - [CLI Interface](docs/cli-interface.md) — Walkthrough of every command and screen of the CLI.
-- [Configuration Files](docs/configuration-files.md) — Exact formats of the AWS files, the settings file and the shell block written by switch-profile.
+- [Configuration Files](docs/configuration-files.md) — Exact formats of the AWS files, the settings and log files and the shell block written by switch-profile.
 - [Development Guide](docs/development-guide.md) — Build, lint, tests, manual testing and releases.
 - [Gotchas](docs/gotchas.md) — Non-obvious pitfalls for users and maintainers.
 <!-- END doc-index -->

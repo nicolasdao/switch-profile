@@ -1,16 +1,17 @@
 ---
-description: Exact formats of the AWS files, the settings file and the shell block written by switch-profile.
+description: Exact formats of the AWS files, the settings and log files and the shell block written by switch-profile.
 tags: [configuration, aws-config, settings, shell]
 source:
   - src/aws/transforms.js
   - src/ini.js
   - src/settings.js
   - src/shell.js
+  - src/log.js
 ---
 
 # Configuration Files
 
-Exact formats of the files `switch-profile` reads and writes: the AWS files, the SSO token cache, its own settings file, and the block it adds to your shell startup file.
+Exact formats of the files `switch-profile` reads and writes: the AWS files, the SSO token cache, its own settings and log files, and the block it adds to your shell startup file.
 
 ## Writing rules
 
@@ -225,6 +226,42 @@ The tool's own state. Created on the first run. Written with a plain (non-atomic
 | 2 | `switch-profile` 2.x | `[default]` of `~/.aws/config` holds the profile's settings, stamped with `switch_profile_name` and `switch_profile_version` |
 
 `usage`, `logins`, `awsCli` and the `switch_profile_generated`/`switch_profile_account_name` keys did not change the format version: older 2.x versions ignore them. If `formatVersion` is higher than the running version supports, the tool stops and asks you to run `npx switch-profile@latest`.
+
+## `~/.switch-profile/switch-profile.log`
+
+Diagnostic log, written by `src/log.js`. Plain text, one entry per line, appended synchronously so nothing is lost when the process exits abruptly. Created `0600` (directory `0700`).
+
+```
+2026-10-07T11:29:08.841Z [90548] INFO  run switch-profile 2.2.0 add
+    node v26.10.0 · linux x64 · tty · ssh
+    shell /bin/zsh (via sp)
+2026-10-07T11:29:12.324Z [90548] WARN  exec aws configure sso --profile goanna-arpio-sso → exit 254 in 3481ms (interactive)
+    aws: [ERROR]: An error occurred (InvalidRequestException) when calling the RegisterClient operation:
+    error_description: Invalid start url provided
+2026-10-07T11:29:12.330Z [90548] ERROR add failed
+  CliError: aws configure sso failed: Invalid start url provided
+  hint: The SSO region is most likely wrong: …
+  exit code: 1
+    at add (src/commands/index.js:…)
+  wrapped:
+  Error: 'aws configure sso' failed: …
+  …
+2026-10-07T11:29:12.331Z [90548] INFO  exit 1
+```
+
+| Entry | When |
+|-------|------|
+| `run …` | Every run: version, arguments, Node, platform, TTY, SSH, shell and whether it came through `sp` |
+| `exec …` | Every AWS CLI (or other) child process: arguments, exit code, duration; `WARN` with its output (last 4,000 characters) when it fails |
+| `ERROR <command> failed` | Any error a command ends with, including expected ones (exit 2 and 3), and errors shown on a home screen page before going back. The full chain: message, hint, exit code, stack, the command and its output, wrapped errors (`catchErrors`) and `cause` |
+| `WARN <what> failed (ignored)` | Tolerated failures the command carries on without (`log.tolerated`), e.g. reading the `sp` status |
+| `ERROR unexpected crash` | Uncaught exceptions and unhandled rejections |
+| `exit N` | The exit code |
+
+- **Secrets are redacted** (`log.redact`, `log.redactArgs`): the values of `--access-token`, `--client-secret` and `--otp`, `aws_secret_access_key`/`aws_session_token` assignments, and `accessToken`/`refreshToken`/`clientSecret`-style JSON fields become `***`.
+- **Size cap:** when a run starts and the file is over 1 MB, it is renamed to `switch-profile.log.1` (replacing the previous one).
+- **Location override:** `SWITCH_PROFILE_LOG_FILE`. The test suite points it at a temp file.
+- Logging never throws: a log that cannot be written is skipped silently.
 
 ---
 

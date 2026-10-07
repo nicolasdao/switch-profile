@@ -74,20 +74,23 @@ npm test            # mocha --exit (every file in test/)
 npm run test:dist   # build, then test/cli.js against dist/cli.js
 ```
 
+`.mocharc.json` loads `test/fixtures/setup.js` first, which points `SWITCH_PROFILE_LOG_FILE` at a temp file so in-process tests never write to your real `~/.switch-profile`. End-to-end tests use a throwaway `HOME`.
+
 | File | Covers |
 |------|--------|
-| `test/cli.js` | End to end, non-interactive: version/help, switching a keys profile with `--json`, exit 2 when a login is needed, non-interactive device login then fuzzy switch, the `sp` env file handoff, exit 3 on ambiguous/unknown input (and JSON errors), `status --json`, `add --from-sso`, `remove` with and without `--yes`, `logout` |
+| `test/cli.js` | End to end, non-interactive: version/help, switching a keys profile with `--json`, exit 2 when a login is needed, non-interactive device login then fuzzy switch, the `sp` env file handoff, exit 3 on ambiguous/unknown input (and JSON errors), `status --json`, `add --from-sso`, `remove` with and without `--yes`, `logout`, the log file in the temp HOME |
 | `test/rank.js` | `PROD` detection, order (current, frecency, config order), fuzzy search across fields, `resolveQuery`, `recordUsage` |
 | `test/clipboard.js` | OSC 52 sequence and the tmux passthrough |
 | `test/shell.js` | Block add/update/remove; real `bash`/`zsh` runs: `sp` sets `AWS_PROFILE` and clears `AWS_ACCESS_KEY_ID`/`AWS_DEFAULT_PROFILE`, bash completion of profiles and subcommands (including several names after `remove`), zsh `compdef` registration (and no failure without `compinit`). Skipped when the shell is missing. |
-| `test/login.js` | Device code over SSH, Linux without a display, explicit modes, no flags before AWS CLI 2.22.0, `parseLoginOutput` |
+| `test/login.js` | Device code over SSH, Linux without a display, explicit modes, no flags before AWS CLI 2.22.0, `parseLoginOutput`, `configureSsoFailure` |
 | `test/transforms.js` | `[default]` rules, 1.x detection/stripping, legacy SSO upgrade, session names, profile listing and kinds, `populateSsoProfiles` (skip existing, stale and prune, naming and clashes) |
 | `test/ini.js` | `src/ini.js`, including CRLF preservation |
 | `test/migrate.js` | `src/migrate.js` against a temporary `HOME` |
-| `test/core.js` | `catchErrors`/`wrapErrors` (error chains flattened outermost first) and `run` (fails on exit code, not on stderr) |
+| `test/core.js` | `catchErrors`/`wrapErrors` (error chains flattened outermost first), `run` (fails on exit code, not on stderr; keeps command, exit code and output on failure) and `lastErrorLine` |
+| `test/log.js` | `src/log.js`: redaction, full error chains, file format, tolerated failures, rotation, never throwing, `~` display path |
 | `test/home.js` | Home screen: the pure `nextFocus()` key rules, and the real prompt driven with simulated keys (switch, search, open actions, back to the list, Esc, no profiles) |
 | `test/navigation.js` | Home screen navigation decisions: `routeChoice()` (quit, switch, open a page) and `afterPage()` (exit after a switch, back on Esc, show expected errors, rethrow the rest) |
-| `test/ui.js` | `fit`, `ago`, `isInteractive` (never with `--no-input` or in CI), `CliError` hint and exit code |
+| `test/ui.js` | `fit`, `ago`, `isInteractive` (never with `--no-input` or in CI), `CliError` hint and exit code, `printError`'s log pointer, `cliErrorFrom` |
 
 ### The fake AWS CLI
 
@@ -119,7 +122,7 @@ Tips:
 - **Scripted runs:** to drive the TUI from a script or an agent, use a pseudo-terminal, for example `script -q /dev/null node index.js` on macOS, `script -qc "node index.js" /dev/null` on Linux, or `node-pty`/`expect`. Send keys as bytes (`\r` enter, `\x1b[B` down arrow, `\x03` Ctrl+C) and give clack time to render between keys.
 - **Non-interactive paths:** `--no-input`, `CI=1`, or piping (`node index.js | cat`).
 - **No colors / no animation:** `NO_COLOR=1`, `ACCESSIBLE=1`.
-- **Errors:** `--debug` prints stack traces.
+- **Errors:** every run is logged to `~/.switch-profile/switch-profile.log` (`tail -f` it while testing); `--debug` also prints stack traces.
 
 ## Release
 

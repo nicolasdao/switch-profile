@@ -35,6 +35,7 @@ switch-profile/
 │   ├── migrate.js            # automatic migrations (1.x [default], legacy SSO)
 │   ├── ini.js                # line-preserving INI helpers (pure)
 │   ├── core.js               # run/exec child processes, catchErrors/wrapErrors, isCommandExist
+│   ├── log.js                # diagnostic log ~/.switch-profile/switch-profile.log (redacted, size-capped)
 │   └── aws/
 │       ├── index.js          # AWS file I/O (atomic writes), AWS CLI calls, SSO cache
 │       ├── transforms.js     # pure rules for what is written to the AWS files
@@ -43,7 +44,8 @@ switch-profile/
 └── test/
     ├── cli.js                # end-to-end, non-interactive, fake AWS CLI + temp HOME
     ├── fixtures/bin/aws      # the fake AWS CLI
-    └── rank.js, home.js, navigation.js, clipboard.js, shell.js, login.js, transforms.js, ini.js, migrate.js, core.js, ui.js
+    ├── fixtures/setup.js     # loaded first (.mocharc.json): sends the log of in-process tests to a temp file
+    └── rank.js, home.js, navigation.js, clipboard.js, shell.js, login.js, transforms.js, ini.js, migrate.js, core.js, ui.js, log.js
 ```
 
 ## Entry point and bundle
@@ -69,9 +71,10 @@ switch-profile/
 
 Defines the commands (see [CLI Interface](cli-interface.md)) and wraps every action in `run()`:
 
+- `main()` logs the start of the run (`log.start`) and registers `uncaughtException`/`unhandledRejection` handlers (log, print, exit 1) and an `exit` handler that logs the exit code.
 - `--debug` sets `SWITCH_PROFILE_DEBUG=1`.
 - `CancelError` prints `Cancelled` and sets exit code 130.
-- With `--json`, a `CliError` is written to stderr as JSON; other errors go through `ui.printError`.
+- Any other error is logged with its full chain (`log.error`). With `--json`, a `CliError` is written to stderr as JSON; other errors go through `ui.printError`.
 - `process.exitCode` is the error's `exitCode` (default 1).
 
 It also sets `AWS_CLI_AGENT_TOOLKIT_HINT_DISABLED=true`, so `aws configure sso` (run by `add`) does not end with a promotional prompt.
@@ -116,15 +119,22 @@ Tool state and the storage format history; migrations keyed off `formatVersion`.
 
 - `index.js`: reads the AWS files, writes them atomically, backs them up, runs the AWS CLI (`sts get-caller-identity`, `sso login` args, `login`, `sso logout`, `sso list-accounts`, `sso list-account-roles`, `configure sso`), reads the SSO token cache, caches `aws --version` in the settings file.
 - `transforms.js`: pure. `[default]` rules, 1.x detection, legacy SSO upgrade, profile listing with kinds, SSO import (`populateSsoProfiles`).
-- `login.js`: pure. `isRemoteSession`, `resolveLoginMode`, `loginFlags`, `parseLoginOutput`, `atLeast`.
+- `login.js`: pure. `isRemoteSession`, `resolveLoginMode`, `loginFlags`, `parseLoginOutput`, `configureSsoFailure` (message and hint for a failed `aws configure sso`), `atLeast`.
 
 ### `src/ini.js`, `src/core.js`
 
-`ini.js`: line-based INI edits that keep untouched lines byte for byte. `core.js`: `run()` (spawn, no shell except on Windows, fails on exit code only, `inherit` option for interactive AWS CLI commands), `exec()`, `isCommandExist()`, and the `catchErrors`/`wrapErrors` tuple helpers used by `src/aws/index.js`.
+`ini.js`: line-based INI edits that keep untouched lines byte for byte. `core.js`: `run()` (spawn, no shell except on Windows, fails on exit code only; `inherit` for interactive AWS CLI commands, `tee` to also capture stderr while showing it; every run logged; a failure carries `command`, `code` and the full `output`, and its message is the telling lines picked by `lastErrorLine()`), `exec()`, `isCommandExist()`, and the `catchErrors`/`wrapErrors` tuple helpers used by `src/aws/index.js`.
+
+### `src/log.js`
+
+The diagnostic log (format in [Configuration Files](configuration-files.md#switch-profileswitch-profilelog)): `start`, `info`, `warn`, `error(context, err)` (full chain via `describeError`), `command` (one child process run), `tolerated(context, fallback)` (a `.catch` handler that logs and returns the fallback), `redact`/`redactArgs`, `displayPath`. Synchronous appends; never throws.
 
 ## Error handling
 
-- `src/aws/index.js` functions mostly return `[errors, result]` tuples (`catchErrors`); commands turn errors into `CliError` with `ui.errorsMessage()`.
+- `src/aws/index.js` functions mostly return `[errors, result]` tuples (`catchErrors`); commands turn them into a `CliError` with `ui.cliErrorFrom(errors, options)`, which keeps the original errors attached for the log.
+- A `CliError` built from a caught error passes it as `cause`, so the log shows what really failed (for example the AWS CLI output behind `Could not list the accounts`).
+- Failures that are tolerated use `.catch(log.tolerated('<what>', fallback))` instead of a silent `.catch(() => …)`. Silent catches remain only for expected misses (a file or token that does not exist).
+- Every error a command ends with, every error shown on a home screen page, and every crash is written to the log; on screen, exit-code-1 errors end with `Details: ~/.switch-profile/switch-profile.log`.
 - Commands throw `CliError` for expected failures (message, hint, exit code 2 or 3) and `CancelError` for cancelled prompts.
 - `migrate.NewerFormatError` becomes a `CliError` in `preflight()`.
 

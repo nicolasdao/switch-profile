@@ -37,4 +37,24 @@ describe('ui', () => {
 		assert.equal(err.hint, 'try status')
 		assert.equal(new ui.CliError('x').exitCode, 1)
 	})
+
+	it('Should point unexpected errors to the log file, but not expected ones', () => {
+		const printed = err => {
+			const lines = []
+			const error = console.error
+			console.error = (...a) => lines.push(a.join(' '))
+			try {
+				ui.printError(err)
+			} finally {
+				console.error = error
+			}
+			return lines.join('\n')
+		}
+		assert.include(printed(new Error('boom')), 'Details: ')
+		assert.include(printed(new ui.CliError('failed')), 'Details: ')
+		assert.notInclude(printed(new ui.CliError('unknown profile', { code:3, hint:'try status' })), 'Details: ')
+		const err = ui.cliErrorFrom([new Error('a'), new Error('b')], { hint:'h' })
+		assert.equal(err.message, 'a\nb')
+		assert.lengthOf(err.errors, 2)
+	})
 })
