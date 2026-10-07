@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-10-07
+
+### Fixed
+- Fix `add` > A single SSO profile hanging on a remote machine (SSH, or no display): `aws configure sso` now uses a device code, like `sp login`, instead of waiting for a browser that cannot open. It follows Settings > SSO login
+
 ## [2.3.0] - 2026-10-07
 
 ### Added
