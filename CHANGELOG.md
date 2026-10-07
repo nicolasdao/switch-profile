@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-07
+
+### Added
+- Add a profile picker to `add` > Accounts from an SSO portal: every new profile starts selected, so Enter adds them all, or untick the ones you don't want (type to search by name, account or role). `--from-sso` and `--yes` still add every new profile
+
 ## [2.1.0] - 2026-10-01
 
 ### Added
