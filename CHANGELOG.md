@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-07
+
+### Added
+- Add a diagnostic log at `~/.switch-profile/switch-profile.log`: every run, every AWS CLI call (exit code, duration, output when it fails) and every error with its full chain. Secrets are redacted and the file is capped at 1 MB. Failed commands end with `Details: ~/.switch-profile/switch-profile.log`
+
+### Changed
+- Show the AWS CLI's own error when `aws configure sso` or `aws login` fails, and explain `Invalid start url provided` as a wrong SSO region, listing the regions of the portals already set up. `add` > A single SSO profile also lists those portals before handing over
+- Show the telling lines of a failed AWS CLI command instead of its whole output
+
 ## [2.2.0] - 2026-10-07
 
 ### Added
