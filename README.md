@@ -154,7 +154,7 @@ sp add          # then choose "Accounts from an SSO portal"
 1. Pick an existing `[sso-session]` or create one: start URL (e.g. `https://acme.awsapps.com/start`), SSO region (where Identity Center lives, not where you deploy), and a short name, usually the client.
 2. Log in if needed.
 3. `switch-profile` lists every account and role you can access, then asks for a default region and a name prefix. Profiles are named `<prefix>-<account-name>-<role>`, for example `acme-prod-workloads-admin`.
-4. A preview shows the new profiles, the ones already set up, and the ones that no longer exist. Confirm to write them.
+4. A preview shows the new profiles, the ones already set up, and the ones that no longer exist. Then pick the new profiles to add: all are selected, so press Enter to add everything, or untick the ones you don't want (type to search by name, account or role).
 
 Run it again later to pick up new accounts. Account/role pairs that already have a profile are never duplicated, whatever its name. Generated profiles that no longer exist can be pruned (after a backup); profiles you wrote by hand are never pruned.
 

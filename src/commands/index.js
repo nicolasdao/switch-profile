@@ -304,15 +304,29 @@ const importFromSso = async (state, opts) => {
 		p.log.message(summary)
 
 	let prune = !!opts.prune
+	let include
 	if (interactive && !opts.yes) {
-		if (preview.added.length && !await ask(p.confirm({ message:`Add ${preview.added.length} profile${preview.added.length == 1 ? '' : 's'}?` })))
-			return p.outro(ui.dim('Nothing changed.'))
+		if (preview.added.length) {
+			const all = preview.addedEntries.map(e => transforms.ssoEntryKey(e.accountId, e.roleName))
+			const picked = await ask(p.autocompleteMultiselect({
+				message: `Add which profiles? ${ui.dim('(all selected: space to untick, type to search, enter to confirm)')}`,
+				maxItems: 12,
+				initialValues: all,
+				options: preview.addedEntries.map((e, i) => ({ value:all[i], label:e.name, hint:[e.accountName, e.accountId, e.roleName].filter(Boolean).join(' · ') }))
+			}))
+			if (!picked.length && !preview.stale.length)
+				return p.outro(ui.dim('Nothing changed.'))
+			if (picked.length < all.length)
+				include = picked
+		}
 		if (preview.stale.length)
 			prune = await ask(p.confirm({ message:`Remove the ${preview.stale.length} profile${preview.stale.length == 1 ? '' : 's'} that no longer exist${preview.stale.length == 1 ? 's' : ''}?`, initialValue:false }))
 	}
+	if (include && !include.length && !prune)
+		return p.outro(ui.dim('Nothing changed.'))
 	if (prune)
 		await aws.backupAwsFiles()
-	const result = transforms.populateSsoProfiles(configStr, { ssoSession:sessionName, entries, region, prefix, prune, version:settings.CLI_VERSION })
+	const result = transforms.populateSsoProfiles(configStr, { ssoSession:sessionName, entries, region, prefix, prune, include, version:settings.CLI_VERSION })
 	await aws.writeAwsFile(aws.AWS_CONFIG_FILE, result.config)
 	await settings.update({})
 

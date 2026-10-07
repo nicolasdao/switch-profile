@@ -113,14 +113,15 @@ Used by the home screen header and `status`. Reads every `~/.aws/sso/cache/*.jso
 2. **Token.** `aws.readSsoToken({ ssoSession })` reads `~/.aws/sso/cache/<sha1(session name)>.json` and returns it if it is valid for at least another minute. Otherwise `ssoLogin({ ssoSession })` (interactive) or exit 2.
 3. **Accounts and roles.** `aws sso list-accounts --access-token … --region <sso_region>`, then `aws sso list-account-roles` per account, 6 at a time.
 4. **Region and prefix.** Defaults: the region of the session's existing profiles (else the SSO region), and the session name.
-5. **Preview.** `populateSsoProfiles(config, { ssoSession, entries, region, prefix, prune:false, version })` returns `{ config, added, existing, stale, removed }`.
-6. **Confirm**, then optionally prune (backup first), then write with the final call.
+5. **Preview.** `populateSsoProfiles(config, { ssoSession, entries, region, prefix, prune:false, version })` returns `{ config, added, addedEntries, existing, stale, removed }` (`addedEntries`: `{ name, accountId, accountName, roleName }` per added profile).
+6. **Select**: a multi-select of `preview.addedEntries`, all selected. When some are unticked, the `transforms.ssoEntryKey(accountId, roleName)` keys of the selected ones go into `include`. Then optionally prune (backup first), then write with the final call (`include` passed through).
 
 `populateSsoProfiles` rules:
 
 - An account/role pair that already has an SSO profile on the same portal (same `sso_session`, or same start URL for legacy profiles) is `existing`, whatever its name. It is not changed.
 - New profiles are named `generatedProfileName(prefix, accountName, accountId, roleName)`: slugs joined with `-`, e.g. `acme-prod-workloads-admin` (account id when there is no account name). A name clash appends `-2`, `-3`, …
 - A new profile has `sso_session`, `sso_account_id`, `sso_role_name`, `region`, `output = json`, `switch_profile_account_name` (when known), `switch_profile_generated = <session>` and `switch_profile_version`.
+- `include` (optional, `ssoEntryKey` list) limits which new pairs are added. Entries left out are still treated as available, so they never make an existing profile stale.
 - `stale` lists profiles with `switch_profile_generated = <session>` whose account/role is no longer returned. Hand-written profiles never have that key, so they are never stale. `prune` removes stale profiles.
 
 ## Creating single profiles

@@ -239,6 +239,11 @@ const generatedProfileName = (prefix, accountName, accountId, roleName) =>
 	[slug(prefix), slug(accountName) || accountId, slug(roleName)].filter(Boolean).join('-')
 
 /**
+ * Identifies an account/role pair of an SSO portal.
+ */
+const ssoEntryKey = (accountId, roleName) => `${accountId}/${roleName}`
+
+/**
  * Creates one profile per account/role available in an SSO portal, skipping account/role pairs that already
  * have a profile (whatever its name), and optionally removing profiles previously generated for this portal
  * that no longer exist.
@@ -249,20 +254,25 @@ const generatedProfileName = (prefix, accountName, accountId, roleName) =>
  * @param  {String}  options.region			Default region of the generated profiles
  * @param  {String}  options.prefix			Name prefix (defaults to the session name)
  * @param  {Boolean} options.prune			Remove stale generated profiles
+ * @param  {Array}   options.include		Optional ssoEntryKey() list: only these new account/role pairs are added.
+ *											The other entries still count as available (never stale).
  * @param  {String}  options.version
- * @return {Object}  { config, added:[names], existing:[names], stale:[names], removed:[names] }
+ * @return {Object}  { config, added:[names], addedEntries:[{ name, accountId, accountName, roleName }],
+ *                     existing:[names], stale:[names], removed:[names] }
  */
-const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, prune, version }) => {
+const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, prune, include, version }) => {
 	let config = configStr
 	const profiles = listProfiles(config)
 	const session = ini.getSection(config, `sso-session ${ssoSession}`) || {}
 	const samePortal = p => p.sso_session == ssoSession || (p.sso_start_url && p.sso_start_url == session.sso_start_url)
-	const key = (accountId, roleName) => `${accountId}/${roleName}`
+	const key = ssoEntryKey
+	const included = include ? new Set(include) : null
 	const byKey = new Map(profiles.filter(p => p.isSso && samePortal(p)).map(p => [key(p.sso_account_id, p.sso_role_name), p]))
 	const taken = new Set(profiles.map(p => p.name))
 	const wanted = new Set(entries.map(e => key(e.accountId, e.roleName)))
 
 	const added = []
+	const addedEntries = []
 	const existing = []
 	for (const e of entries) {
 		const found = byKey.get(key(e.accountId, e.roleName))
@@ -270,6 +280,8 @@ const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, p
 			existing.push(found.name)
 			continue
 		}
+		if (included && !included.has(key(e.accountId, e.roleName)))
+			continue
 		const base = generatedProfileName(prefix || ssoSession, e.accountName, e.accountId, e.roleName)
 		let name = base
 		for (let i = 2; taken.has(name); i++)
@@ -286,6 +298,7 @@ const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, p
 			[VERSION_KEY, version]
 		])
 		added.push(name)
+		addedEntries.push({ name, accountId:e.accountId, accountName:e.accountName, roleName:e.roleName })
 	}
 
 	const stale = profiles.filter(p => p.generated == ssoSession && !wanted.has(key(p.sso_account_id, p.sso_role_name))).map(p => p.name)
@@ -296,7 +309,7 @@ const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, p
 			removed.push(name)
 		}
 	}
-	return { config, added, existing, stale, removed }
+	return { config, added, addedEntries, existing, stale, removed }
 }
 
 /**
@@ -325,6 +338,7 @@ module.exports = {
 	ACCOUNT_NAME_KEY,
 	generatedProfileName,
 	populateSsoProfiles,
+	ssoEntryKey,
 	listSsoSessions,
 	addSsoSession,
 	NAME_KEY,

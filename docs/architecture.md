@@ -158,6 +158,6 @@ add → importFromSso
   ├─ aws.listSsoAccounts + listSsoRoles    6 role lookups in parallel
   ├─ region + prefix
   ├─ transforms.populateSsoProfiles        preview (prune: false)
-  ├─ confirm, optional prune (backup first)
-  └─ transforms.populateSsoProfiles        final → atomic write of ~/.aws/config
+  ├─ pick new profiles (all selected), optional prune (backup first)
+  └─ transforms.populateSsoProfiles        final (include) → atomic write of ~/.aws/config
 ```

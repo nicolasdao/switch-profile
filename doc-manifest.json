@@ -135,7 +135,7 @@
         "Per-terminal switching (`src/shell.js`)",
         "Profile names"
       ],
-      "line_count": 198,
+      "line_count": 199,
       "links_to": [
         "docs/configuration-files.md"
       ],
@@ -192,7 +192,7 @@
         "`settings`",
         "Visual conventions"
       ],
-      "line_count": 381,
+      "line_count": 386,
       "links_to": [],
       "over_size": false,
       "parse_error": null,

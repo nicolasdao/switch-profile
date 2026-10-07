@@ -184,6 +184,22 @@ sso_region = eu-west-1
 		assert.notInclude(pruned.config, 'acme-b-r')
 	})
 
+	it('Should add only the included new profiles, without marking the others stale', () => {
+		const config = '[sso-session acme]\nsso_start_url = https://acme.awsapps.com/start\n'
+		const entries = [{ accountId:'1', accountName:'A', roleName:'R' }, { accountId:'2', accountName:'B', roleName:'R' }, { accountId:'3', accountName:'C', roleName:'R' }]
+		const first = t.populateSsoProfiles(config, { ssoSession:'acme', entries:entries.slice(0, 2), version:'2' })
+		const preview = t.populateSsoProfiles(first.config, { ssoSession:'acme', entries, version:'2' })
+		assert.deepEqual(preview.addedEntries, [{ name:'acme-c-r', accountId:'3', accountName:'C', roleName:'R' }])
+		const none = t.populateSsoProfiles(first.config, { ssoSession:'acme', entries, include:[], prune:true, version:'2' })
+		assert.deepEqual(none.added, [])
+		assert.deepEqual(none.existing, ['acme-a-r', 'acme-b-r'])
+		assert.deepEqual(none.stale, [])
+		assert.equal(none.config, first.config)
+		const picked = t.populateSsoProfiles(config, { ssoSession:'acme', entries, include:[t.ssoEntryKey('3', 'R')], version:'2' })
+		assert.deepEqual(picked.added, ['acme-c-r'])
+		assert.notInclude(picked.config, 'acme-a-r')
+	})
+
 	it('Should name generated profiles predictably and avoid clashes', () => {
 		assert.equal(t.generatedProfileName('Acme', 'Prod  Workloads!', '1', 'AdministratorAccess'), 'acme-prod-workloads-administratoraccess')
 		const out = t.populateSsoProfiles('[sso-session acme]\nsso_start_url = https://a.awsapps.com/start\n\n[profile acme-a-r]\nregion = x\n', { ssoSession:'acme', entries:[{ accountId:'1', accountName:'A', roleName:'R' }], version:'2' })
