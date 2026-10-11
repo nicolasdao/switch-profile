@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-11
+
+### Added
+- Add `rename [profile] [new-name]` (alias `mv`) and a Rename action on the home screen, to give profiles friendlier names than the generated `<prefix>-<account>-<role>`. It also updates `source_profile` references, the default profile and the home screen order, and this terminal's `AWS_PROFILE` through `sp`. SSO logins keep working, and re-imports still recognize renamed profiles. It warns about `credential_process` commands that still pass the old name. Tab-completion covers `rename` and `mv`
+
 ## [2.3.1] - 2026-10-07
 
 ### Fixed
