@@ -19,6 +19,7 @@ Examples:
   $ sp acme prod                fuzzy match: switches if only one profile matches
   $ sp login                    log in again now (device code over SSH)
   $ sp add                      import every account of an SSO portal
+  $ sp rename <profile> <new>   give a profile a friendlier name
   $ switch-profile status --json
 
 'sp' is the shortcut switch-profile installs on first use (or from Settings). It also
@@ -97,6 +98,7 @@ const main = argv => {
 		.option('-y, --yes', 'do not ask for confirmation')
 		.action(run(opts => commands.add([], opts)))
 	program.command('remove').alias('rm').argument('[profiles...]').description('remove profiles').option('-y, --yes', 'do not ask for confirmation').action(run(commands.remove))
+	program.command('rename').alias('mv').argument('[profile]').argument('[new-name]').description('rename a profile').action(run(commands.rename))
 	program.command('settings').description('per-terminal switching, login mode and more').action(run(opts => commands.settings([], opts)))
 	// 1.x compatibility: 'switch-profile switch'.
 	program.command('switch', { hidden:true }).action(run(opts => commands.switch('', opts)))

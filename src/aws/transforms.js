@@ -312,6 +312,58 @@ const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, p
 	return { config, added, addedEntries, existing, stale, removed }
 }
 
+const escapeRegex = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Renames a profile everywhere the AWS files refer to it by name. Credentials and SSO tokens are keyed by
+ * session, start URL or role, never by profile name, so they keep working.
+ *
+ * 	- '[profile from]' (or '[from]') in ~/.aws/config becomes '[profile to]'; its lines are kept as they are.
+ * 	- '[from]' in ~/.aws/credentials (access keys) becomes '[to]'.
+ * 	- 'source_profile = from' in other profiles becomes 'source_profile = to'.
+ * 	- 'switch_profile_name = from' in [default] becomes 'to', so the profile stays the current default.
+ *
+ * 'credential_process' commands that mention '--profile from' are not rewritten (they are arbitrary shell
+ * commands): they are returned in 'processes' so the caller can warn about them.
+ *
+ * @param  {String} configStr
+ * @param  {String} credsStr
+ * @param  {String} from
+ * @param  {String} to
+ * @return {Object} { config, creds, sources:[profiles whose source_profile changed], wasDefault, processes:[profiles] }
+ */
+const renameProfile = (configStr, credsStr, from, to) => {
+	const section = from == 'default' ? null : configSectionName(configStr, from)
+	if (!section)
+		throw new Error(`Profile ${from} not found in ~/.aws/config.`)
+	if (to == 'default' || configSectionName(configStr, to) || ini.getSection(credsStr, to))
+		throw new Error(`Profile ${to} already exists.`)
+
+	let config = ini.renameSection(configStr, section, `profile ${to}`)
+	const creds = ini.renameSection(credsStr, from, to)
+
+	const sources = []
+	const processes = []
+	const mentions = new RegExp(`--profile[\\s=]+["']?${escapeRegex(from)}(?=["'\\s]|$)`)
+	for (const s of ini.listSections(config).filter(s => s != 'default' && !s.startsWith('sso-session '))) {
+		const params = ini.getSection(config, s)
+		const name = s.replace(/^profile\s+/, '')
+		if (params.source_profile == from) {
+			config = ini.setKeys(config, s, { source_profile:to })
+			sources.push(name)
+		}
+		if (params.credential_process && mentions.test(params.credential_process))
+			processes.push(name)
+	}
+
+	const defaults = ini.getSection(config, 'default') || {}
+	const wasDefault = defaults[NAME_KEY] == from
+	if (wasDefault)
+		config = ini.setKeys(config, 'default', { [NAME_KEY]:to, ...(defaults.source_profile == from ? { source_profile:to } : {}) })
+
+	return { config, creds, sources, wasDefault, processes }
+}
+
 /**
  * Lists the [sso-session] sections.
  */
@@ -353,5 +405,6 @@ module.exports = {
 	sessionNameFromUrl,
 	upgradeLegacySsoProfiles,
 	stampProfile,
-	listProfiles
+	listProfiles,
+	renameProfile
 }

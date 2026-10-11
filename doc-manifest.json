@@ -42,7 +42,7 @@
         "Documentation",
         "License"
       ],
-      "line_count": 291,
+      "line_count": 292,
       "links_to": [
         "docs/architecture.md",
         "docs/aws-profile-management.md",
@@ -131,6 +131,7 @@
         "Import from an SSO portal",
         "Creating single profiles",
         "Removing profiles",
+        "Renaming profiles",
         "AWS CLI version",
         "Migrations (`src/migrate.js`)",
         "`runMigrations()`",
@@ -138,7 +139,7 @@
         "Per-terminal switching (`src/shell.js`)",
         "Profile names"
       ],
-      "line_count": 199,
+      "line_count": 213,
       "links_to": [
         "docs/configuration-files.md"
       ],
@@ -192,11 +193,13 @@
         "`add`",
         "Import from an SSO portal",
         "`remove [profiles...] [--yes]`",
+        "`rename [profile] [new-name]`",
         "`settings`",
         "Visual conventions"
       ],
-      "line_count": 394,
+      "line_count": 419,
       "links_to": [
+        "docs/aws-profile-management.md",
         "docs/configuration-files.md"
       ],
       "over_size": false,
@@ -246,7 +249,7 @@
         "Legacy SSO upgrade",
         "INI helpers (`src/ini.js`)"
       ],
-      "line_count": 367,
+      "line_count": 370,
       "links_to": [],
       "over_size": false,
       "parse_error": null,
@@ -325,6 +328,7 @@
         "LLM agents and automation",
         "Switching and search",
         "A fuzzy match switches only when it is unique",
+        "Renaming a profile does not reach other terminals or scripts",
         "Logins",
         "Account access manager needs `aws login`, not `aws sso login`",
         "The clipboard over SSH depends on your terminal",
@@ -341,7 +345,7 @@
         "clack's spinner exits the process on Ctrl+C",
         "clack autocomplete re-filters function options"
       ],
-      "line_count": 160,
+      "line_count": 165,
       "links_to": [],
       "over_size": false,
       "parse_error": null,

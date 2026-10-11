@@ -21,7 +21,7 @@ npx switch-profile
 │  ○ globex-dev      ReadOnly  333333333333  us-east-1
 │  ○ initech-dev     Admin     444444444444  eu-west-1
 │
-│  [Log in] [Add] [Remove] [Log out] [Settings]
+│  [Log in] [Add] [Rename] [Remove] [Log out] [Settings]
 └  ↑↓ choose · enter switch · tab actions · esc quit
 ```
 
@@ -100,7 +100,7 @@ No profiles yet? `switch-profile` starts the **Add profiles** flow. To import ev
 Running `sp` (or `npx switch-profile`) with no arguments opens the home screen:
 
 - **Type and press Enter** to switch. That's the whole path for everyday use.
-- **Tab** moves to the action bar below the list, which is always visible however many profiles you have: **Log in**, **Add**, **Remove**, **Log out**, **Settings**. Use ←→ to choose and Enter to open.
+- **Tab** moves to the action bar below the list, which is always visible however many profiles you have: **Log in**, **Add**, **Rename**, **Remove**, **Log out**, **Settings**. Use ←→ to choose and Enter to open.
 - **Every action opens as a page and comes back** to the home screen when it's done. **Esc** goes back from a page, and quits from the home screen.
 - A switch ends the session, which is what lets `sp` set `AWS_PROFILE` in your terminal.
 
@@ -115,6 +115,7 @@ Running `sp` (or `npx switch-profile`) with no arguments opens the home screen:
 | `logout [--yes]` | Ends every SSO session on this machine (`aws sso logout`, plus `aws logout --all` on AWS CLI 2.32+). |
 | `add` | Adds profiles: import accounts from an SSO portal (recommended), a single SSO profile, a console sign-in profile, or access keys. |
 | `add --from-sso [session]` | Imports or re-syncs every account and role of an `[sso-session]`. Options: `--region`, `--prefix`, `--prune`, `--yes`. |
+| `rename [profile] [new-name]` | Renames a profile (alias `mv`), for example an imported `acme-prod-workloads-administratoraccess` to `acme-prod`. Also updates `source_profile` references, the default profile and the home screen order. SSO logins are kept. Scripts, terminals and tools that use the old name need the new one. |
 | `remove [profiles...] [--yes]` | Removes profiles (alias `rm`). The current default cannot be removed. |
 | `settings` | Per-terminal switching, SSO login mode, legacy SSO upgrade. |
 
@@ -155,7 +156,7 @@ sp add          # then choose "Accounts from an SSO portal"
 
 1. Pick an existing `[sso-session]` or create one: start URL (e.g. `https://acme.awsapps.com/start`), SSO region (where Identity Center lives, not where you deploy), and a short name, usually the client.
 2. Log in if needed.
-3. `switch-profile` lists every account and role you can access, then asks for a default region and a name prefix. Profiles are named `<prefix>-<account-name>-<role>`, for example `acme-prod-workloads-admin`.
+3. `switch-profile` lists every account and role you can access, then asks for a default region and a name prefix. Profiles are named `<prefix>-<account-name>-<role>`, for example `acme-prod-workloads-admin`. Rename any of them later with `sp rename` (re-imports still recognize them).
 4. A preview shows the new profiles, the ones already set up, and the ones that no longer exist. Then pick the new profiles to add: all are selected, so press Enter to add everything, or untick the ones you don't want (type to search by name, account or role).
 
 Run it again later to pick up new accounts. Account/role pairs that already have a profile are never duplicated, whatever its name. Generated profiles that no longer exist can be pruned (after a backup); profiles you wrote by hand are never pruned.

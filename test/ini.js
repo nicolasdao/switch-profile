@@ -41,6 +41,13 @@ describe('ini', () => {
 		assert.include(out, '[profile dev]\nregion = us-west-2\nsso_session = acme\n\n[sso-session acme]')
 		assert.equal(ini.setKeys(SAMPLE, 'nope', { a:1 }), SAMPLE)
 	})
+	it('Should rename a section, keeping its lines', () => {
+		const out = ini.renameSection(SAMPLE, 'profile dev', 'profile acme-dev')
+		assert.deepEqual(ini.listSections(out), ini.listSections(SAMPLE).map(s => s == 'profile dev' ? 'profile acme-dev' : s))
+		assert.deepEqual(ini.getEntries(out, 'profile acme-dev'), ini.getEntries(SAMPLE, 'profile dev'))
+		assert.equal(ini.renameSection(SAMPLE, 'nope', 'x'), SAMPLE)
+		assert.equal(ini.renameSection('[a]\r\nk = 1\r\n', 'a', 'b'), '[b]\r\nk = 1\r\n')
+	})
 	it('Should preserve CRLF line endings', () => {
 		const out = ini.setKeys('[default]\r\na = 1\r\n', 'default', { b:'2' })
 		assert.equal(out, '[default]\r\na = 1\r\nb = 2\r\n')

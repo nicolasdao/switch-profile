@@ -78,12 +78,12 @@ npm run test:dist   # build, then test/cli.js against dist/cli.js
 
 | File | Covers |
 |------|--------|
-| `test/cli.js` | End to end, non-interactive: version/help, switching a keys profile with `--json`, exit 2 when a login is needed, non-interactive device login then fuzzy switch, the `sp` env file handoff, exit 3 on ambiguous/unknown input (and JSON errors), `status --json`, `add --from-sso`, `remove` with and without `--yes`, `logout`, the log file in the temp HOME |
+| `test/cli.js` | End to end, non-interactive: version/help, switching a keys profile with `--json`, exit 2 when a login is needed, non-interactive device login then fuzzy switch, the `sp` env file handoff, exit 3 on ambiguous/unknown input (and JSON errors), `status --json`, `add --from-sso`, `remove` with and without `--yes`, `rename` (validation, default kept, `sp` handoff, settings moved), `logout`, the log file in the temp HOME |
 | `test/rank.js` | `PROD` detection, order (current, frecency, config order), fuzzy search across fields, `resolveQuery`, `recordUsage` |
 | `test/clipboard.js` | OSC 52 sequence and the tmux passthrough |
 | `test/shell.js` | Block add/update/remove; real `bash`/`zsh` runs: `sp` sets `AWS_PROFILE` and clears `AWS_ACCESS_KEY_ID`/`AWS_DEFAULT_PROFILE`, bash completion of profiles and subcommands (including several names after `remove`), zsh `compdef` registration (and no failure without `compinit`). Skipped when the shell is missing. |
 | `test/login.js` | Device code over SSH, Linux without a display, explicit modes, no flags before AWS CLI 2.22.0, `parseLoginOutput`, `configureSsoFailure` |
-| `test/transforms.js` | `[default]` rules, 1.x detection/stripping, legacy SSO upgrade, session names, profile listing and kinds, `populateSsoProfiles` (skip existing, stale and prune, naming and clashes) |
+| `test/transforms.js` | `[default]` rules, 1.x detection/stripping, legacy SSO upgrade, session names, profile listing and kinds, `populateSsoProfiles` (skip existing, stale and prune, naming and clashes), `renameProfile` (references, credentials, re-import, refusals) |
 | `test/ini.js` | `src/ini.js`, including CRLF preservation |
 | `test/migrate.js` | `src/migrate.js` against a temporary `HOME` |
 | `test/aws.js` | `aws.createSsoProfile` against a temporary `HOME` and the fake AWS CLI: device code flags over SSH, none in browser mode, AWS CLI output kept on failure |

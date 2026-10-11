@@ -205,5 +205,68 @@ sso_region = eu-west-1
 		const out = t.populateSsoProfiles('[sso-session acme]\nsso_start_url = https://a.awsapps.com/start\n\n[profile acme-a-r]\nregion = x\n', { ssoSession:'acme', entries:[{ accountId:'1', accountName:'A', roleName:'R' }], version:'2' })
 		assert.deepEqual(out.added, ['acme-a-r-2'])
 	})
-})
 
+	describe('renameProfile', () => {
+		const CONFIG = `[default]
+sso_session = acme
+sso_account_id = 111111111111
+switch_profile_name = acme-prod-workloads-admin
+
+[sso-session acme]
+sso_start_url = https://acme.awsapps.com/start
+
+[profile acme-prod-workloads-admin]
+# hand-written comment
+sso_session = acme
+sso_account_id = 111111111111
+sso_role_name = Admin
+switch_profile_generated = acme
+
+[deploy]
+role_arn = arn:aws:iam::111111111111:role/Deploy
+source_profile = acme-prod-workloads-admin
+
+[profile legacy-tool]
+credential_process = aws configure export-credentials --profile acme-prod-workloads-admin --format process
+
+[profile other]
+credential_process = aws configure export-credentials --profile acme-prod-workloads-admin-2
+`
+		const CREDS = '[keys]\naws_access_key_id = AKIA\naws_secret_access_key = s\n'
+
+		it('Should rename the section and every reference to it', () => {
+			const out = t.renameProfile(CONFIG, CREDS, 'acme-prod-workloads-admin', 'acme-prod')
+			assert.include(out.config, '[profile acme-prod]\n# hand-written comment\nsso_session = acme')
+			assert.notInclude(out.config, '[profile acme-prod-workloads-admin]')
+			assert.equal(ini.getSection(out.config, 'deploy').source_profile, 'acme-prod')
+			assert.equal(t.getDefaultProfileName(out.config, out.creds), 'acme-prod')
+			assert.equal(ini.getSection(out.config, 'profile acme-prod').switch_profile_generated, 'acme', 'still prunable by the import')
+			assert.deepEqual(out.sources, ['deploy'])
+			assert.isTrue(out.wasDefault)
+			assert.deepEqual(out.processes, ['legacy-tool'], 'a longer name is not a mention')
+			assert.equal(out.creds, CREDS)
+		})
+
+		it('Should rename the credentials section of an access keys profile', () => {
+			const out = t.renameProfile(`${CONFIG}\n[profile keys]\nregion = us-west-2\n`, CREDS, 'keys', 'my-keys')
+			assert.include(out.creds, '[my-keys]\naws_access_key_id = AKIA')
+			assert.include(out.config, '[profile my-keys]')
+			assert.isFalse(out.wasDefault)
+		})
+
+		it('Should keep matching the same SSO account and role on the next import', () => {
+			const { config } = t.renameProfile(CONFIG, CREDS, 'acme-prod-workloads-admin', 'acme-prod')
+			const out = t.populateSsoProfiles(config, { ssoSession:'acme', entries:[{ accountId:'111111111111', accountName:'Prod Workloads', roleName:'Admin' }], version:'2' })
+			assert.deepEqual(out.added, [])
+			assert.deepEqual(out.existing, ['acme-prod'])
+		})
+
+		it('Should refuse unknown profiles, taken names and default', () => {
+			assert.throws(() => t.renameProfile(CONFIG, CREDS, 'nope', 'x'), /not found/)
+			assert.throws(() => t.renameProfile(CONFIG, CREDS, 'default', 'x'), /not found/)
+			assert.throws(() => t.renameProfile(CONFIG, CREDS, 'deploy', 'other'), /already exists/)
+			assert.throws(() => t.renameProfile(CONFIG, CREDS, 'deploy', 'keys'), /already exists/)
+			assert.throws(() => t.renameProfile(CONFIG, CREDS, 'deploy', 'default'), /already exists/)
+		})
+	})
+})

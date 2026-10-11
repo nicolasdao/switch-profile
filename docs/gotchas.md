@@ -16,6 +16,7 @@ Pitfalls that are not obvious, for users first, then for maintainers.
     - [LLM agents and automation](#llm-agents-and-automation)
 - [Switching and search](#switching-and-search)
     - [A fuzzy match switches only when it is unique](#a-fuzzy-match-switches-only-when-it-is-unique)
+    - [Renaming a profile does not reach other terminals or scripts](#renaming-a-profile-does-not-reach-other-terminals-or-scripts)
 - [Logins](#logins)
     - [Account access manager needs `aws login`, not `aws sso login`](#account-access-manager-needs-aws-login-not-aws-sso-login)
     - [The clipboard over SSH depends on your terminal](#the-clipboard-over-ssh-depends-on-your-terminal)
@@ -89,6 +90,10 @@ Prefixing also lets concurrent agents use different profiles. For agents: `switc
 ### A fuzzy match switches only when it is unique
 
 `sp acme prod` switches immediately only if the text is an exact profile name or exactly one profile matches. Matching covers names, account ids, account names, roles, SSO sessions and regions, so short words often match several profiles (`sp prod` may match every client's prod). In a terminal the home screen then opens pre-filtered; in scripts the command exits 3 and lists candidates. Use `use <exact-name>` in scripts to avoid surprises.
+
+### Renaming a profile does not reach other terminals or scripts
+
+`sp rename` updates everything in the AWS files and the settings file (`source_profile`, the default, usage), and the current terminal when it runs through `sp`. It cannot reach `AWS_PROFILE` in other open terminals, scripts, CI, kubeconfigs or Terraform settings that name the old profile: they fail with `The config profile (old) could not be found` until updated. A `credential_process` that passes `--profile <old>` is not rewritten either; the command warns about it. Profiles seeded from another source (for example a provisioning script that re-adds missing sections) come back under the old name.
 
 ## Logins
 

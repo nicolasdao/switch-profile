@@ -114,6 +114,7 @@ The AWS CLI and SDKs ignore unknown keys.
 | Console sign-in | `[profile <name>]` with `region` and `switch_profile_version`, then `aws login` adds its own settings. |
 | Access keys | `[profile <name>]` with `region`, `output = json`, `switch_profile_version`. |
 | Remove | The profile section is removed (regex up to the next `[`). `[sso-session]` sections are kept. |
+| Rename | The section header becomes `[profile <new>]` (body unchanged), `source_profile` values and `switch_profile_name` in `[default]` that use the old name follow. |
 | Legacy SSO upgrade | See [Legacy SSO upgrade](#legacy-sso-upgrade). |
 
 ---
@@ -140,6 +141,7 @@ switch_profile_version = 2.0.0
 | Switch to any other profile | `[default]` is removed (static keys there would override the settings in `~/.aws/config`) |
 | Add access keys | New `[name]` section with the keys and the stamp |
 | Remove | The `[name]` section is removed |
+| Rename | The `[name]` header becomes `[<new>]` |
 
 ### Format used by switch-profile 1.x
 
@@ -300,8 +302,8 @@ _switch_profile_complete() {
 	local -a items
 	items=(${(f)"$(sed -n 's/^\[profile \(.*\)\]$/\1/p' "${AWS_CONFIG_FILE:-$HOME/.aws/config}" 2>/dev/null)"})
 	if (( CURRENT == 2 )); then
-		compadd -- $items status login logout add remove settings use
-	elif [[ $words[2] == (remove|rm) ]] || { (( CURRENT == 3 )) && [[ $words[2] == (use|login) ]] }; then
+		compadd -- $items status login logout add remove settings use rename
+	elif [[ $words[2] == (remove|rm) ]] || { (( CURRENT == 3 )) && [[ $words[2] == (use|login|rename|mv) ]] }; then
 		compadd -- $items
 	fi
 }
@@ -362,6 +364,7 @@ Log in once per session afterwards (the token cache is keyed by session name).
 | `getEntries(str, name)` / `getSection(str, name)` | Key/value pairs as an array or object |
 | `setSection(str, name, entries, { position })` | Replaces a section's body, or creates it at the `top` or `end` |
 | `removeSection(str, name)` | Removes a section |
+| `renameSection(str, name, newName)` | Rewrites only a section's header line |
 | `setKeys(str, name, changes)` | Sets or deletes (`null`) individual keys in place |
 
 Profile removal still uses the older regex in `src/aws/index.js`.

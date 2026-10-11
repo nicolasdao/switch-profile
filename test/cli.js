@@ -117,6 +117,24 @@ region = us-west-2
 		assert.equal(run(['remove', 'acme-prod', '--yes']).code, 3, 'the current default cannot be removed')
 	})
 
+	it('Should rename a profile and keep it the default', () => {
+		assert.equal(run(['rename', 'acme-prod']).code, 3, 'the new name is required without a terminal')
+		assert.equal(run(['rename', 'acme-prod', 'acme-dev']).code, 3, 'name taken')
+		assert.equal(run(['rename', 'acme-prod', 'Bad Name']).code, 3)
+		const file = join(home, 'rename-env-file')
+		const r = run(['rename', 'acme-prod', 'acme-production', '--json'], { AWS_PROFILE:'acme-prod', SWITCH_PROFILE_SHELL:'zsh', SWITCH_PROFILE_ENV_FILE:file })
+		assert.equal(r.code, 0, r.err)
+		assert.deepInclude(JSON.parse(r.out), { from:'acme-prod', to:'acme-production', default:true, terminal:true })
+		assert.equal(fs.readFileSync(file, 'utf8'), 'acme-production', 'this terminal follows the new name')
+		assert.include(config(), '[profile acme-production]')
+		assert.include(config(), 'switch_profile_name = acme-production')
+		const s = JSON.parse(fs.readFileSync(join(home, '.switch-profile', 'settings.json'), 'utf8'))
+		assert.property(s.usage, 'acme-production')
+		assert.notProperty(s.usage, 'acme-prod')
+		assert.equal(run(['mv', 'acme-production', 'acme-prod']).code, 0)
+		assert.include(config(), 'switch_profile_name = acme-prod')
+	})
+
 	it('Should log out', () => {
 		assert.equal(run(['logout']).code, 3)
 		assert.equal(run(['logout', '--yes']).code, 0)

@@ -136,6 +136,20 @@ Used by the home screen header and `status`. Reads every `~/.aws/sso/cache/*.jso
 
 `aws.deleteProfiles(names)` removes `[profile <name>]` (or `[<name>]`) from config and `[<name>]` from credentials with a regex that cuts up to the next `[`. `default` cannot be deleted; the command refuses the current default. `[sso-session]` sections are kept.
 
+## Renaming profiles
+
+`aws.renameProfile(from, to)` applies `transforms.renameProfile()` and writes both files atomically (no backup: only a few lines change). The `rename` command then moves `settings.usage[from]` to `to`, and `settings.logins[from]` when the profile's login key is its name (console sign-in and role profiles; SSO profiles are keyed by session).
+
+| Reference | Change |
+|-----------|--------|
+| `[profile from]` (or `[from]`) in `~/.aws/config` | Header becomes `[profile to]`; every line of the section is kept |
+| `[from]` in `~/.aws/credentials` | Becomes `[to]` |
+| `source_profile = from` in other profiles | Becomes `to` |
+| `switch_profile_name = from` in `[default]` | Becomes `to`, so the profile stays the default |
+| `credential_process … --profile from` | Not changed (arbitrary command); returned in `processes` for a warning |
+
+Renaming is safe because nothing AWS stores is keyed by profile name: SSO tokens use the session name (or start URL), and a console sign-in's `login_session` stays in the renamed section. A renamed imported profile keeps `switch_profile_generated` and its account/role, so the next import still treats it as `existing` (never re-added) and pruning still works. What cannot be updated: `AWS_PROFILE` in other terminals, scripts, CI, kubeconfigs and Terraform settings that use the old name.
+
 ## AWS CLI version
 
 `aws.getAwsCliVersion()` parses `aws --version`. That starts Python and costs 0.5 to 1 second, so the result is cached in `settings.awsCli` as `{ path, mtimeMs, version }`, keyed by the resolved binary path and its modification time. Upgrading the AWS CLI changes the mtime and invalidates the cache. `awsCliV2Exists()` checks the command exists (`which`/`where`) and that the major version is at least 2.
@@ -180,7 +194,7 @@ What `sp` does:
 
 Tab-completion (same block):
 
-- Candidates: subcommands (`status login logout add remove settings use`) and profile names at the first position; profile names after `use` and `login` (one), and after `remove`/`rm` (any number).
+- Candidates: subcommands (`status login logout add remove settings use rename`) and profile names at the first position; profile names after `use`, `login` and `rename`/`mv` (one), and after `remove`/`rm` (any number).
 - Profile names are read with `sed` from `${AWS_CONFIG_FILE:-~/.aws/config}` (`[profile <name>]` lines), so completing never starts Node.
 - zsh: `compdef`, only if `compinit` already ran. bash: `complete -F`. fish: `complete -c`. PowerShell: `Register-ArgumentCompleter` on the function's `$Rest` parameter (which collects all arguments).
 

@@ -25,7 +25,7 @@ switch-profile/
 │   │   ├── common.js         # preflight, loadState, CancelError/ask, describe, loginState
 │   │   ├── switch.js         # home screen loop, connect (identity check + login), switchTo, sp offer
 │   │   ├── login-flow.js     # the SSO login screen (device code, clipboard, QR, timer)
-│   │   └── index.js          # use, status, login, logout, add (+ SSO import), remove, settings
+│   │   └── index.js          # use, status, login, logout, add (+ SSO import), remove, rename, settings
 │   ├── ui.js                 # colors (util.styleText), symbols, isInteractive, CliError, spinners
 │   ├── home.js               # the home screen prompt: search, profile list, always-visible action bar
 │   ├── rank.js               # fuzzy search (fuzzysort), frecency, PROD detection, query resolution
@@ -86,7 +86,7 @@ It also sets `AWS_CLI_AGENT_TOOLKIT_HINT_DISABLED=true`, so `aws configure sso` 
 | `common.js` | `preflight()` (AWS CLI v2 check, `runMigrations`, legacy SSO offer when interactive, rewrite of an outdated `sp` block), `loadState()` (profiles, default profile, settings), `ask()` (clack cancel to `CancelError`), `describe()` (role · account · region), `loginState()` (SSO status text and `needsLogin`), `loginKey()` (key of `settings.logins`). |
 | `switch.js` | `switchCommand` (default command), `homeLoop()` (home screen, then a page per action and back; Esc in a page goes back, a switch ends the session; its decisions are the pure `routeChoice()` and `afterPage()`), the status header and env warnings, `pick()` (the home screen fed by `rank.rankProfiles`), `connect()` (identity check, login, retry), `switchTo()` (write default, record usage, hand to `sp`, warnings, output), `offerShortcut()`, `enableShortcut()`. |
 | `login-flow.js` | `ssoLogin()` (interactive login screen, or `plainLogin()` passthrough when non-interactive) and `rememberLogin()`. |
-| `index.js` | `use`, `status`, `login`, `logout`, `add` and `importFromSso`, `remove`, `settings`. Exports the command map used by `src/cli.js` and by the home screen's actions. |
+| `index.js` | `use`, `status`, `login`, `logout`, `add` and `importFromSso`, `remove`, `rename`, `settings`. Exports the command map used by `src/cli.js` and by the home screen's actions. |
 
 ### `src/ui.js`
 
@@ -118,7 +118,7 @@ Tool state and the storage format history; migrations keyed off `formatVersion`.
 ### `src/aws/`
 
 - `index.js`: reads the AWS files, writes them atomically, backs them up, runs the AWS CLI (`sts get-caller-identity`, `sso login` args, `login`, `sso logout`, `sso list-accounts`, `sso list-account-roles`, `configure sso`), reads the SSO token cache, caches `aws --version` in the settings file.
-- `transforms.js`: pure. `[default]` rules, 1.x detection, legacy SSO upgrade, profile listing with kinds, SSO import (`populateSsoProfiles`).
+- `transforms.js`: pure. `[default]` rules, 1.x detection, legacy SSO upgrade, profile listing with kinds, SSO import (`populateSsoProfiles`), `renameProfile`.
 - `login.js`: pure. `isRemoteSession`, `resolveLoginMode`, `loginFlags`, `parseLoginOutput`, `configureSsoFailure` (message and hint for a failed `aws configure sso`), `atLeast`.
 
 ### `src/ini.js`, `src/core.js`

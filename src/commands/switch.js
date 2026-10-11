@@ -54,6 +54,7 @@ const warnEnv = () => {
 const ACTIONS = [
 	{ key:'login', label:'Log in' },
 	{ key:'add', label:'Add' },
+	{ key:'rename', label:'Rename' },
 	{ key:'remove', label:'Remove' },
 	{ key:'logout', label:'Log out' },
 	{ key:'settings', label:'Settings' }
@@ -227,6 +228,8 @@ const runAction = async (key, state, opts) => {
 	const commands = require('./index')
 	if (key == 'login')
 		return commands.login(state.defaultName, { ...opts, fromPicker:true })
+	if (key == 'rename')
+		return commands.rename(null, null, { ...opts, fromPicker:true })
 	return commands[key](opts.args || [], { ...opts, fromPicker:true })
 }
 

@@ -31,6 +31,7 @@ Commands are defined in `src/cli.js` (commander). `sp` passes its arguments thro
 | `login` | `[profile]`, `--device`, `--browser` |
 | `logout` | `-y, --yes` |
 | `add` | `--from-sso [session]`, `--region <region>`, `--prefix <prefix>`, `--prune`, `-y, --yes` |
+| `rename` / `mv` | `[profile]`, `[new-name]` |
 | `remove` / `rm` | `[profiles...]`, `-y, --yes` |
 | `settings` | |
 | `switch` | Hidden. 1.x compatibility, same as the default command without arguments. |
@@ -107,7 +108,7 @@ Exit codes 2 and 3 come with their own fix in the hint and skip that line; they 
 │  ○ globex-readonly  ReadOnly    333333333333  us-east-1       PROD
 │  ○ sandbox          access keys               us-west-2
 │
-│  [Log in] [Add] [Remove] [Log out] [Settings]
+│  [Log in] [Add] [Rename] [Remove] [Log out] [Settings]
 └  ↑↓ choose · enter switch · tab actions · esc quit
 ```
 
@@ -158,6 +159,7 @@ When there are no rows (no match, or no profiles), the focus moves to the action
 |--------|------|
 | Log in | `login` for the default profile (a fresh session, even if the current one is valid) |
 | Add | `add` |
+| Rename | `rename` (pick the profile, then edit its name) |
 | Remove | `remove` |
 | Log out | `logout` |
 | Settings | `settings` ("Done" returns to the home screen) |
@@ -354,6 +356,29 @@ If there is no valid cached token for the session, the login screen runs. Then:
 ## `remove [profiles...] [--yes]`
 
 Without names, a searchable multi-select (the current default is disabled: `current default: switch first`). Then a confirmation (default No). Non-interactive: names and `--yes` are required (exit 3 otherwise). Removing the current default, or an unknown name, exits 3. `[sso-session]` sections are kept.
+
+## `rename [profile] [new-name]`
+
+Gives a profile a new name, typically a friendlier one than the generated `<prefix>-<account>-<role>`.
+
+```
+◆  Rename which profile?
+│  Search: workloads_
+│  ● acme-prod-workloads-administratoraccess   AdministratorAccess · 111111111111 · ap-southeast-2
+◆  New name for acme-prod-workloads-administratoraccess
+│  acme-prod_
+◆  Renamed acme-prod-workloads-administratoraccess to acme-prod
+│  still the default profile
+│  source_profile updated in deploy
+└  Other terminals, scripts and tools that use acme-prod-workloads-administratoraccess (AWS_PROFILE or --profile) need the new name.
+```
+
+- Without a profile, a searchable list opens; without a new name, a text prompt opens pre-filled with the current name. Non-interactive: both are required (exit 3).
+- The new name follows the `add` rules (lowercase letters, numbers, `-`, `_`, at least 2 characters) and must not be taken or `default` (exit 3).
+- What changes is listed in [AWS Profile Management](aws-profile-management.md#renaming-profiles). SSO logins keep working: tokens are keyed by session, not profile name.
+- When this terminal's `AWS_PROFILE` is the old name, `sp` sets it to the new one. Without `sp`, a warning shows the `export` command.
+- A `credential_process` that passes `--profile <old>` is not rewritten; a warning names it.
+- `--json`: `{"from", "to", "default", "sources", "processes", "terminal"}`.
 
 ## `settings`
 

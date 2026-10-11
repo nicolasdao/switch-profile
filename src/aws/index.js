@@ -338,6 +338,27 @@ const deleteProfiles = profiles => catchErrors((async () => {
 		await writeAwsFile(AWS_CREDS_FILE, credsStr)
 })())
 
+/**
+ * Renames a profile in ~/.aws/config and ~/.aws/credentials. See transforms.renameProfile for what changes.
+ *
+ * @return {Object} { sources, wasDefault, processes }
+ */
+const renameProfile = (from, to) => catchErrors((async () => {
+	const errMsg = `Fail to rename profile ${from} to ${to}`
+	const [configStrErrors, configStr] = await getConfigFile()
+	const [credsStrErrors, credsStr] = await getCredsFile()
+	if (configStrErrors || credsStrErrors)
+		throw wrapErrors(errMsg, configStrErrors || credsStrErrors)
+
+	try {
+		const { config, creds, sources, wasDefault, processes } = transforms.renameProfile(configStr, credsStr, from, to)
+		await writeAwsFiles({ config, creds })
+		return { sources, wasDefault, processes }
+	} catch(err) {
+		throw wrapErrors(errMsg, [err])
+	}
+})())
+
 const createProfile = ({ name, aws_access_key_id, aws_secret_access_key, region }) => catchErrors((async () => {
 	await awsCliV2Exists()
 
@@ -424,6 +445,7 @@ module.exports = {
 	getDefaultProfile,
 	setDefaultProfile,
 	deleteProfiles,
+	renameProfile,
 	createProfile,
 	createSsoProfile,
 	backupAwsFiles,

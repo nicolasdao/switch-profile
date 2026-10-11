@@ -102,6 +102,19 @@ const removeSection = (str, name) => {
 }
 
 /**
+ * Renames a section, rewriting only its header line. Returns the content unchanged if the section does not
+ * exist.
+ */
+const renameSection = (str, name, newName) => {
+	const blocks = parse(str)
+	const block = findBlock(blocks, name)
+	if (!block)
+		return str
+	block.lines[0] = `[${newName}]`
+	return stringify(blocks, detectNewline(str))
+}
+
+/**
  * Sets or deletes individual keys in an existing section, leaving every other line untouched. New keys
  * are appended at the end of the section. A null/undefined value deletes the key.
  *
@@ -164,5 +177,6 @@ module.exports = {
 	getSection,
 	setSection,
 	removeSection,
+	renameSection,
 	setKeys
 }

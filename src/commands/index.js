@@ -13,7 +13,7 @@ const { resolveLoginMode, isRemoteSession, configureSsoFailure } = require('../a
 const ui = require('../ui')
 const { ask, preflight, loadState, loginKey, describe, loginState, upgradeLegacySso } = require('./common')
 const { ssoLogin, rememberLogin } = require('./login-flow')
-const { switchCommand, switchTo, connect, enableShortcut } = require('./switch')
+const { switchCommand, switchTo, connect, enableShortcut, exportHint } = require('./switch')
 
 const intro = opts => {
 	if (!opts.fromPicker && !opts.json)
@@ -381,6 +381,71 @@ const remove = async (names, opts) => {
 	p.outro(`${ui.ok(ui.sym.ok)} Removed ${names.join(', ')}`)
 }
 
+// Moves obj[from] to obj[to], if present.
+const moveKey = (obj, from, to) => {
+	if (!obj || !(from in obj))
+		return obj
+	const { [from]:value, ...rest } = obj
+	return { ...rest, [to]:value }
+}
+
+/**
+ * 'switch-profile rename [profile] [new-name]': renames a profile, and every reference to it switch-profile
+ * knows about (source_profile, the default profile, usage and login history).
+ */
+const rename = async (from, to, opts) => {
+	const interactive = await begin(opts)
+	const state = await loadState()
+	if (!from) {
+		if (!interactive)
+			throw new ui.CliError('Which profile?', { code:3, hint:'Run: switch-profile rename <profile> <new-name>' })
+		from = await ask(p.autocomplete({
+			message: 'Rename which profile?',
+			maxItems: 12,
+			options: state.profiles.map(x => ({ value:x.name, label:x.name, hint:describe(x) }))
+		}))
+	}
+	const profile = findProfile(state, from)
+	const taken = [...state.profiles.map(x => x.name).filter(n => n != from), 'default']
+	const validate = v => v == from ? 'That is already its name.' : validateProfileName(taken)(v)
+	if (!to) {
+		if (!interactive)
+			throw new ui.CliError('What is the new name?', { code:3, hint:`Run: switch-profile rename ${from} <new-name>` })
+		to = await ask(p.text({ message:`New name for ${from}`, initialValue:from, validate }))
+	}
+	const invalid = validate(to)
+	if (invalid)
+		throw new ui.CliError(invalid, { code:3 })
+
+	const [errors, result] = await aws.renameProfile(from, to)
+	if (errors)
+		throw ui.cliErrorFrom(errors)
+	const current = await settings.read()
+	// Only console sign-in and role profiles key their login history by profile name (SSO uses the session).
+	await settings.update({
+		usage: moveKey(current.usage, from, to),
+		...(loginKey(profile) == from ? { logins:moveKey(current.logins, from, to) } : {})
+	})
+	const inTerminal = process.env.AWS_PROFILE == from
+	const terminal = inTerminal ? await shell.exportProfile(to).catch(log.tolerated('handing the profile to sp', false)) : false
+
+	if (opts.json) {
+		process.stdout.write(JSON.stringify({ from, to, default:result.wasDefault, sources:result.sources, processes:result.processes, terminal }) + '\n')
+		return
+	}
+	const lines = [
+		result.wasDefault ? ui.dim('still the default profile') : null,
+		result.sources.length ? ui.dim(`source_profile updated in ${result.sources.join(', ')}`) : null,
+		terminal ? ui.dim('this terminal now uses the new name') : null
+	].filter(Boolean)
+	p.log.success([`Renamed ${ui.accent(from)} to ${ui.accent(to)}`, ...lines].join('\n'))
+	if (result.processes.length)
+		p.log.warn(`The credential_process of ${result.processes.join(', ')} still uses --profile ${from}. Update ${result.processes.length == 1 ? 'it' : 'them'} in ~/.aws/config.`)
+	if (inTerminal && !terminal)
+		p.log.warn(`This terminal still uses ${from}. Run:\n   ${ui.accent(exportHint(to))}`)
+	p.outro(ui.dim(`Other terminals, scripts and tools that use ${from} (AWS_PROFILE or --profile) need the new name.`))
+}
+
 const LOGIN_MODE_LABELS = {
 	auto: 'Auto: device code over SSH, browser otherwise',
 	device: 'Always device code (approve from any device)',
@@ -450,5 +515,6 @@ module.exports = {
 	logout,
 	add,
 	remove,
+	rename,
 	settings: settingsCommand
 }

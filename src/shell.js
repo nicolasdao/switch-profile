@@ -30,7 +30,7 @@ const blockStart = version => `${BLOCK_START_PREFIX} v${version} (managed by swi
 // Credentials in the environment take precedence over AWS_PROFILE (CLI, boto3) or are ignored by it
 // (JS SDK), and boto3 reads AWS_DEFAULT_PROFILE first. Switching clears them so every tool agrees.
 const CLEARED_VARS = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_DEFAULT_PROFILE']
-const SUBCOMMANDS = ['status', 'login', 'logout', 'add', 'remove', 'settings', 'use']
+const SUBCOMMANDS = ['status', 'login', 'logout', 'add', 'remove', 'settings', 'use', 'rename']
 const PROFILES_SED = 'sed -n \'s/^\\[profile \\(.*\\)\\]$/\\1/p\''
 
 const POSIX_FUNCTION = shell => `${FUNCTION_NAME}() {
@@ -55,7 +55,7 @@ const ZSH_COMPLETION = `_switch_profile_complete() {
 	items=(\${(f)"$(${PROFILES_SED} "\${AWS_CONFIG_FILE:-$HOME/.aws/config}" 2>/dev/null)"})
 	if (( CURRENT == 2 )); then
 		compadd -- $items ${SUBCOMMANDS.join(' ')}
-	elif [[ $words[2] == (remove|rm) ]] || { (( CURRENT == 3 )) && [[ $words[2] == (use|login) ]] }; then
+	elif [[ $words[2] == (remove|rm) ]] || { (( CURRENT == 3 )) && [[ $words[2] == (use|login|rename|mv) ]] }; then
 		compadd -- $items
 	fi
 }
@@ -68,7 +68,7 @@ const BASH_COMPLETION = `_switch_profile_complete() {
 	items="$(${PROFILES_SED} "\${AWS_CONFIG_FILE:-$HOME/.aws/config}" 2>/dev/null)"
 	if [ "$COMP_CWORD" -eq 1 ]; then
 		items="$items ${SUBCOMMANDS.join(' ')}"
-	elif [ "$COMP_CWORD" -lt 2 ] || ! case "\${COMP_WORDS[1]}" in use|login|remove|rm) true ;; *) false ;; esac; then
+	elif [ "$COMP_CWORD" -lt 2 ] || ! case "\${COMP_WORDS[1]}" in use|login|rename|mv|remove|rm) true ;; *) false ;; esac; then
 		return 0
 	elif [ "$COMP_CWORD" -gt 2 ] && [ "\${COMP_WORDS[1]}" != remove ] && [ "\${COMP_WORDS[1]}" != rm ]; then
 		return 0
@@ -99,7 +99,7 @@ function __switch_profile_profiles
 end
 for __sp_cmd in ${FUNCTION_NAME} switch-profile
 	complete -c $__sp_cmd -f -n 'test (count (commandline -opc)) -eq 1' -a '(__switch_profile_profiles) ${SUBCOMMANDS.join(' ')}'
-	complete -c $__sp_cmd -f -n 'test (count (commandline -opc)) -eq 2; and __fish_seen_subcommand_from use login' -a '(__switch_profile_profiles)'
+	complete -c $__sp_cmd -f -n 'test (count (commandline -opc)) -eq 2; and __fish_seen_subcommand_from use login rename mv' -a '(__switch_profile_profiles)'
 	complete -c $__sp_cmd -f -n '__fish_seen_subcommand_from remove rm' -a '(__switch_profile_profiles)'
 end`
 
