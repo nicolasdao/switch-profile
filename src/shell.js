@@ -30,7 +30,7 @@ const blockStart = version => `${BLOCK_START_PREFIX} v${version} (managed by swi
 // Credentials in the environment take precedence over AWS_PROFILE (CLI, boto3) or are ignored by it
 // (JS SDK), and boto3 reads AWS_DEFAULT_PROFILE first. Switching clears them so every tool agrees.
 const CLEARED_VARS = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_DEFAULT_PROFILE']
-const SUBCOMMANDS = ['status', 'login', 'logout', 'add', 'remove', 'settings', 'use', 'rename']
+const SUBCOMMANDS = ['status', 'login', 'logout', 'add', 'remove', 'settings', 'use', 'rename', 'portals']
 const PROFILES_SED = 'sed -n \'s/^\\[profile \\(.*\\)\\]$/\\1/p\''
 
 const POSIX_FUNCTION = shell => `${FUNCTION_NAME}() {

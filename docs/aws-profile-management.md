@@ -80,6 +80,8 @@ Since AWS CLI 2.22.0, `aws sso login` defaults to PKCE, which needs a browser on
 | `resolveLoginMode(mode, ctx)` | `device` or `browser`; `auto` → `device` when remote |
 | `loginFlags(mode, ctx)` | `['--use-device-code', '--no-browser']` for device mode on CLI >= 2.22.0, else `[]`. `--no-browser` makes the CLI print the URL that pre-fills the code; `switch-profile` opens the browser itself on local machines. |
 | `parseLoginOutput(text)` | `{ url, code, completeUrl }` from what `aws sso login` printed so far |
+| `isWrongSsoRegion(output)` | Whether the AWS CLI's error is how AWS reports a start URL sent to the wrong SSO region (`Invalid start url`, `invalid_request`, `InvalidRequestException`) |
+| `portalRegionFromHeaders(values)` | The region in `portal.sso.<region>.amazonaws.com` found in header values, else `null` |
 
 The mode comes from `--device`/`--browser`, else `settings.loginMode` (`auto` by default). `aws.ssoLoginArgs(target, mode)` builds `sso login --profile <name>` or `sso login --sso-session <name>` plus the flags.
 
@@ -88,7 +90,7 @@ The mode comes from `--device`/`--browser`, else `settings.loginMode` (`auto` by
 - Interactive: spawns `aws sso login` with stdout and stderr piped. As soon as the output contains the code and pre-filled URL (device) or a URL (browser), it shows them. Device mode copies the code (`clipboard.copy`), opens the browser locally, and listens for `q` (QR code via `uqr`), `c` (copy again), `o`/Enter (open browser, local only) and Ctrl+C (kills the child, `CancelError`). A `timerSpinner` shows the wait. If nothing parseable arrives within 10 seconds, the raw output is printed.
 - Non-interactive (`plainLogin`): the AWS CLI's output is passed through on stderr; a failure exits 2.
 - Success stores the time in `settings.logins[loginKey]` (`sso_session`, else start URL, else profile name).
-- Failure shows the AWS CLI's error lines; `invalid_grant` adds a hint about the SSO region.
+- Failure shows the AWS CLI's error lines. A wrong SSO region (`isWrongSsoRegion`) or `invalid_grant` adds a hint about the SSO region; the first also sets `wrongRegion` on the `CliError`, so a caller that owns the `[sso-session]` can offer to fix it.
 
 ### Login state (`aws.getSsoLoginStatus(startUrl)`)
 
@@ -109,8 +111,8 @@ Used by the home screen header and `status`. Reads every `~/.aws/sso/cache/*.jso
 
 `importFromSso()` in `src/commands/index.js`, with the pure part in `transforms.populateSsoProfiles()`.
 
-1. **Session.** An existing `[sso-session]` (`transforms.listSsoSessions`) or a new one (`transforms.addSsoSession`: `sso_start_url`, `sso_region`, `sso_registration_scopes = sso:account:access`, `switch_profile_version`), written immediately.
-2. **Token.** `aws.readSsoToken({ ssoSession })` reads `~/.aws/sso/cache/<sha1(session name)>.json` and returns it if it is valid for at least another minute. Otherwise `ssoLogin({ ssoSession })` (interactive) or exit 2.
+1. **Session.** An existing `[sso-session]` (`transforms.listSsoSessions`) or a new one (`transforms.addSsoSession`: `sso_start_url`, `sso_region`, `sso_registration_scopes = sso:account:access`, `switch_profile_version`), written immediately. For a new one, the region picker starts on `aws.detectSsoRegion(startUrl)`.
+2. **Token.** `aws.readSsoToken({ ssoSession })` reads `~/.aws/sso/cache/<sha1(session name)>.json` and returns it if it is valid for at least another minute. Otherwise `ssoLogin({ ssoSession })` (interactive) or exit 2. When the login fails with `wrongRegion`, `portals.fixSsoRegion` proposes the detected region (confirm) or the region picker, saves it with `transforms.updateSsoSession`, and the login runs again. Keeping the current region rethrows the login error.
 3. **Accounts and roles.** `aws sso list-accounts --access-token … --region <sso_region>`, then `aws sso list-account-roles` per account, 6 at a time.
 4. **Region and prefix.** Defaults: the region of the session's existing profiles (else the SSO region), and the session name.
 5. **Preview.** `populateSsoProfiles(config, { ssoSession, entries, region, prefix, prune:false, version })` returns `{ config, added, addedEntries, existing, stale, removed }` (`addedEntries`: `{ name, accountId, accountName, roleName }` per added profile).
@@ -123,6 +125,16 @@ Used by the home screen header and `status`. Reads every `~/.aws/sso/cache/*.jso
 - A new profile has `sso_session`, `sso_account_id`, `sso_role_name`, `region`, `output = json`, `switch_profile_account_name` (when known), `switch_profile_generated = <session>` and `switch_profile_version`.
 - `include` (optional, `ssoEntryKey` list) limits which new pairs are added. Entries left out are still treated as available, so they never make an existing profile stale.
 - `stale` lists profiles with `switch_profile_generated = <session>` whose account/role is no longer returned. Hand-written profiles never have that key, so they are never stale. `prune` removes stale profiles.
+
+### The SSO region of a portal (`aws.detectSsoRegion`)
+
+AWS answers a start URL sent to the wrong SSO region with `invalid_request` (`aws sso login`) or `Invalid start url provided` (`aws configure sso`), and nothing in the start URL says which region is right. The portal's start page does: it is served with `Link: <https://portal.sso.<region>.amazonaws.com/>; rel=preconnect` (and the same host in `Content-Security-Policy`). `detectSsoRegion(startUrl)` fetches the page (fragment removed, redirects followed, 5 second timeout) and parses those headers with `portalRegionFromHeaders`. It never throws: unreachable pages or missing headers return `null` (logged).
+
+This is not a documented AWS contract, so the result is only ever a suggestion the user confirms, never written silently.
+
+## Editing a portal
+
+`transforms.updateSsoSession(config, { name, startUrl, region, version })` changes `sso_start_url` and/or `sso_region` of an `[sso-session]` and stamps it; every profile with `sso_session = <name>` follows, and `[default]` (which holds `sso_session`, not the session's keys) too. Used by `portals`, the error screen and the import. The SSO token cache is keyed by the session name, so a token from before the change is reused if still valid; a token for a wrong region or URL never existed, so the next use logs in.
 
 ## Creating single profiles
 
@@ -194,7 +206,7 @@ What `sp` does:
 
 Tab-completion (same block):
 
-- Candidates: subcommands (`status login logout add remove settings use rename`) and profile names at the first position; profile names after `use`, `login` and `rename`/`mv` (one), and after `remove`/`rm` (any number).
+- Candidates: subcommands (`status login logout add remove settings use rename portals`) and profile names at the first position; profile names after `use`, `login` and `rename`/`mv` (one), and after `remove`/`rm` (any number).
 - Profile names are read with `sed` from `${AWS_CONFIG_FILE:-~/.aws/config}` (`[profile <name>]` lines), so completing never starts Node.
 - zsh: `compdef`, only if `compinit` already ran. bash: `complete -F`. fish: `complete -c`. PowerShell: `Register-ArgumentCompleter` on the function's `$Rest` parameter (which collects all arguments).
 

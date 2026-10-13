@@ -206,6 +206,16 @@ sso_region = eu-west-1
 		assert.deepEqual(out.added, ['acme-a-r-2'])
 	})
 
+	it('Should update the start URL and SSO region of an [sso-session] only', () => {
+		const config = '[sso-session acme]\nsso_start_url = https://acme.awsapps.com/start\nsso_region = us-east-1\nsso_registration_scopes = sso:account:access\n\n[profile acme-dev]\nsso_session = acme\nregion = us-east-1\n'
+		const out = t.updateSsoSession(config, { name:'acme', region:'ap-southeast-2', version:'2.5.0' })
+		assert.deepEqual(ini.getSection(out, 'sso-session acme'), { sso_start_url:'https://acme.awsapps.com/start', sso_region:'ap-southeast-2', sso_registration_scopes:'sso:account:access', switch_profile_version:'2.5.0' })
+		assert.deepEqual(ini.getSection(out, 'profile acme-dev'), { sso_session:'acme', region:'us-east-1' })
+		const url = t.updateSsoSession(out, { name:'acme', startUrl:'https://acme2.awsapps.com/start', version:'2.5.0' })
+		assert.include(ini.getSection(url, 'sso-session acme'), { sso_start_url:'https://acme2.awsapps.com/start', sso_region:'ap-southeast-2' })
+		assert.equal(t.updateSsoSession(config, { name:'other', region:'eu-west-1', version:'2.5.0' }), config)
+	})
+
 	describe('renameProfile', () => {
 		const CONFIG = `[default]
 sso_session = acme

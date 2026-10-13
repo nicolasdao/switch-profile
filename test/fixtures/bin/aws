@@ -27,6 +27,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 	if (args[0] == 'sso' && args[1] == 'login') {
 		const session = arg('--sso-session') || section(`profile ${arg('--profile')}`).sso_session
 		const s = section(`sso-session ${session}`)
+		// What AWS answers when the start URL is sent to the wrong SSO region: fails before any URL or code.
+		if (process.env.FAKE_SSO_REGION && s.sso_region != process.env.FAKE_SSO_REGION) { console.error('\naws: [ERROR]: An error occurred (InvalidRequestException) when calling the StartDeviceAuthorization operation: \n\nAdditional error details:\nerror: invalid_request\nerror_description: Invalid request'); process.exit(254) }
 		if (process.env.FAKE_AWS_VERSION && !has('--use-device-code')) // < 2.22: device code is the default flow
 			process.stdout.write('Attempting to automatically open the SSO authorization page in your default browser.\nIf the browser does not open or you wish to use a different device to authorize this request, open the following URL:\n\nhttps://device.sso.us-east-1.amazonaws.com/\n\nThen enter the code:\n\nLEGA-CYCD\n')
 		else if (has('--use-device-code')) {

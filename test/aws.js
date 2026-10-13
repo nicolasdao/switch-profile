@@ -54,4 +54,32 @@ const { join } = require('path')
 			delete process.env.FAKE_CONFIGURE_FAIL
 		}
 	})
+
+	describe('detectSsoRegion', () => {
+		const http = require('http')
+		let server, base, paths
+		before(done => {
+			paths = []
+			server = http.createServer((req, res) => {
+				paths.push(req.url)
+				if (req.url == '/redirect')
+					return res.writeHead(302, { location:'/start/' }).end()
+				res.writeHead(200, req.url == '/start/' ? { link:'<https://portal.sso.eu-central-1.amazonaws.com/>; rel=preconnect; crossorigin' } : {}).end('<html></html>')
+			}).listen(0, '127.0.0.1', () => { base = `http://127.0.0.1:${server.address().port}`; done() })
+		})
+		after(done => server.close(done))
+
+		it('Should read the region from the portal page, without the URL fragment', async () => {
+			assert.equal(await aws.detectSsoRegion(`${base}/start/#/`), 'eu-central-1')
+			assert.equal(paths.pop(), '/start/')
+		})
+		it('Should follow redirects', async () => {
+			assert.equal(await aws.detectSsoRegion(`${base}/redirect`), 'eu-central-1')
+		})
+		it('Should return null when the page names no region or cannot be reached', async () => {
+			assert.isNull(await aws.detectSsoRegion(`${base}/other`))
+			assert.isNull(await aws.detectSsoRegion('http://127.0.0.1:1/start'))
+			assert.isNull(await aws.detectSsoRegion('not a url'))
+		})
+	})
 })

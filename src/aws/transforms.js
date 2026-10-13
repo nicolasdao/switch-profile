@@ -385,8 +385,24 @@ const addSsoSession = (configStr, { name, startUrl, region, version }) => {
 	])
 }
 
+/**
+ * Changes the start URL and/or SSO region of an [sso-session] (pure). Profiles that reference the session
+ * follow it. Undefined fields are left as they are.
+ */
+const updateSsoSession = (configStr, { name, startUrl, region, version }) => {
+	const section = `sso-session ${name}`
+	if (!ini.getSection(configStr, section))
+		return configStr
+	return ini.setKeys(configStr, section, {
+		...(startUrl ? { sso_start_url:startUrl } : {}),
+		...(region ? { sso_region:region } : {}),
+		[VERSION_KEY]:version
+	})
+}
+
 module.exports = {
 	GENERATED_KEY,
+	updateSsoSession,
 	ACCOUNT_NAME_KEY,
 	generatedProfileName,
 	populateSsoProfiles,

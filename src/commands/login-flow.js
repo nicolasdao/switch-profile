@@ -8,7 +8,7 @@ const p = require('@clack/prompts')
 const { renderUnicodeCompact } = require('uqr')
 const aws = require('../aws')
 const settings = require('../settings')
-const { parseLoginOutput, isRemoteSession, atLeast } = require('../aws/login')
+const { parseLoginOutput, isRemoteSession, atLeast, isWrongSsoRegion } = require('../aws/login')
 const clipboard = require('../clipboard')
 const ui = require('../ui')
 const log = require('../log')
@@ -149,10 +149,17 @@ const ssoLogin = async (target, { label, loginKey, interactive, loginMode }) => 
 		spin.error('Login did not complete')
 	const lines = output.trim().split('\n').map(l => l.trim()).filter(Boolean)
 	const detail = (lines.filter(l => /error|exception|denied|invalid|expired|unable/i.test(l)).slice(-2).join('\n')) || lines.slice(-1)[0] || ''
-	throw new ui.CliError(`SSO login for ${label} failed.${detail ? `\n${detail}` : ''}`, {
+	const wrongRegion = isWrongSsoRegion(output)
+	const error = new ui.CliError(`SSO login for ${label} failed.${detail ? `\n${detail}` : ''}`, {
 		cause: Object.assign(new Error(`aws ${args.join(' ')} exited with code ${code}`), { output }),
-		hint: /invalid_grant|InvalidGrant/i.test(output) ? 'Check the SSO region of this profile: it must be the region of your IAM Identity Center, not where your resources live.' : `Try again. Details: ${log.displayPath()}`
+		hint: wrongRegion ? 'The SSO region is most likely wrong: it must be the region where IAM Identity Center lives, not where you deploy. Check and fix it with: sp portals'
+			: /invalid_grant|InvalidGrant/i.test(output) ? 'Check the SSO region of this profile: it must be the region of your IAM Identity Center, not where your resources live.'
+				: `Try again. Details: ${log.displayPath()}`
 	})
+	// Lets the error screen name the portal and offer to fix its region.
+	error.wrongRegion = wrongRegion
+	error.target = target
+	throw error
 }
 
 /**

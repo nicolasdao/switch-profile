@@ -78,19 +78,19 @@ npm run test:dist   # build, then test/cli.js against dist/cli.js
 
 | File | Covers |
 |------|--------|
-| `test/cli.js` | End to end, non-interactive: version/help, switching a keys profile with `--json`, exit 2 when a login is needed, non-interactive device login then fuzzy switch, the `sp` env file handoff, exit 3 on ambiguous/unknown input (and JSON errors), `status --json`, `add --from-sso`, `remove` with and without `--yes`, `rename` (validation, default kept, `sp` handoff, settings moved), `logout`, the log file in the temp HOME |
+| `test/cli.js` | End to end, non-interactive: version/help, switching a keys profile with `--json`, exit 2 when a login is needed, non-interactive device login then fuzzy switch, the `sp` env file handoff, exit 3 on ambiguous/unknown input (and JSON errors), `status --json`, `add --from-sso`, `remove` with and without `--yes`, `rename` (validation, default kept, `sp` handoff, settings moved), `portals` (`--json` list, `--region` edit, exit 3 on bad input), `logout`, the log file in the temp HOME |
 | `test/rank.js` | `PROD` detection, order (current, frecency, config order), fuzzy search across fields, `resolveQuery`, `recordUsage` |
 | `test/clipboard.js` | OSC 52 sequence and the tmux passthrough |
 | `test/shell.js` | Block add/update/remove; real `bash`/`zsh` runs: `sp` sets `AWS_PROFILE` and clears `AWS_ACCESS_KEY_ID`/`AWS_DEFAULT_PROFILE`, bash completion of profiles and subcommands (including several names after `remove`), zsh `compdef` registration (and no failure without `compinit`). Skipped when the shell is missing. |
-| `test/login.js` | Device code over SSH, Linux without a display, explicit modes, no flags before AWS CLI 2.22.0, `parseLoginOutput`, `configureSsoFailure` |
-| `test/transforms.js` | `[default]` rules, 1.x detection/stripping, legacy SSO upgrade, session names, profile listing and kinds, `populateSsoProfiles` (skip existing, stale and prune, naming and clashes), `renameProfile` (references, credentials, re-import, refusals) |
+| `test/login.js` | Device code over SSH, Linux without a display, explicit modes, no flags before AWS CLI 2.22.0, `parseLoginOutput`, `configureSsoFailure`, `isWrongSsoRegion`, `portalRegionFromHeaders` |
+| `test/transforms.js` | `[default]` rules, 1.x detection/stripping, legacy SSO upgrade, session names, profile listing and kinds, `populateSsoProfiles` (skip existing, stale and prune, naming and clashes), `renameProfile` (references, credentials, re-import, refusals), `updateSsoSession` |
 | `test/ini.js` | `src/ini.js`, including CRLF preservation |
 | `test/migrate.js` | `src/migrate.js` against a temporary `HOME` |
-| `test/aws.js` | `aws.createSsoProfile` against a temporary `HOME` and the fake AWS CLI: device code flags over SSH, none in browser mode, AWS CLI output kept on failure |
+| `test/aws.js` | `aws.createSsoProfile` against a temporary `HOME` and the fake AWS CLI: device code flags over SSH, none in browser mode, AWS CLI output kept on failure; `detectSsoRegion` against a local HTTP server (fragment removed, redirects, `null` when unreachable) |
 | `test/core.js` | `catchErrors`/`wrapErrors` (error chains flattened outermost first), `run` (fails on exit code, not on stderr; keeps command, exit code and output on failure) and `lastErrorLine` |
 | `test/log.js` | `src/log.js`: redaction, full error chains, file format, tolerated failures, rotation, never throwing, `~` display path |
 | `test/home.js` | Home screen: the pure `nextFocus()` key rules, and the real prompt driven with simulated keys (switch, search, open actions, back to the list, Esc, no profiles) |
-| `test/navigation.js` | Home screen navigation decisions: `routeChoice()` (quit, switch, open a page) and `afterPage()` (exit after a switch, back on Esc, show expected errors, rethrow the rest) |
+| `test/navigation.js` | Home screen navigation decisions: `routeChoice()` (quit, switch, open a page) and `afterPage()` (exit after a switch, back on Esc, show expected errors, rethrow the rest), the error screen's `portalOfError()` and `recoveryOptions()` |
 | `test/ui.js` | `fit`, `ago`, `isInteractive` (never with `--no-input` or in CI), `CliError` hint and exit code, `printError`'s log pointer, `cliErrorFrom` |
 
 ### The fake AWS CLI
@@ -99,7 +99,7 @@ npm run test:dist   # build, then test/cli.js against dist/cli.js
 
 - answers `--version` (`aws-cli/2.33.17`, or `FAKE_AWS_VERSION`; below 2.22 `sso login` prints the old default device-code output), `sts get-caller-identity` (fails for SSO profiles without a cached token), `sso login` (prints device code or browser output, then writes a token to `~/.aws/sso/cache`), `sso logout`, `sso list-accounts`, `sso list-account-roles` and `configure export-credentials`;
 - logs every call to `$HOME/aws-calls.log`;
-- reads `FAKE_LOGIN_DELAY` (ms before the login completes, default 2500) and `FAKE_LOGIN_FAIL` (fail with `invalid_grant`).
+- reads `FAKE_LOGIN_DELAY` (ms before the login completes, default 2500), `FAKE_LOGIN_FAIL` (fail with `invalid_grant`) and `FAKE_SSO_REGION` (`sso login` fails with `invalid_request`, as AWS does for a wrong SSO region, unless the session's `sso_region` equals it).
 
 Anything else exits 2 with `fake aws: unsupported …`. Extend it when a command starts calling a new AWS CLI subcommand. The CLI tests are skipped on Windows.
 
@@ -118,6 +118,7 @@ HOME=$TEST_HOME PATH=$PWD/test/fixtures/bin:$PATH node index.js
 Tips:
 
 - **Login screen:** `HOME=$TEST_HOME PATH=… FAKE_LOGIN_DELAY=20000 node index.js login acme-dev --device` gives 20 seconds to try `q`, `c`, `o` and Ctrl+C. `FAKE_LOGIN_FAIL=1` shows the failure path.
+- **Wrong SSO region:** give an `[sso-session]` a wrong `sso_region` and a real start URL, then run `sp add` with `FAKE_SSO_REGION=<the right region>`: the first login fails and the import offers the region read from the portal. Switching to one of its profiles from the home screen opens the error screen instead.
 - **SSH behavior locally:** set `SSH_CONNECTION=x` to get device code mode, OSC 52 instead of `pbcopy`, and no browser opening.
 - **Narrow terminals:** resize below 100 and 80 columns to check the region and role columns disappear.
 - **Scripted runs:** to drive the TUI from a script or an agent, use a pseudo-terminal, for example `script -q /dev/null node index.js` on macOS, `script -qc "node index.js" /dev/null` on Linux, or `node-pty`/`expect`. Send keys as bytes (`\r` enter, `\x1b[B` down arrow, `\x03` Ctrl+C) and give clack time to render between keys.

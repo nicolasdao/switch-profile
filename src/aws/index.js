@@ -6,7 +6,7 @@ const { exec, run, isCommandExist, catchErrors, wrapErrors } = require('../core'
 const settings = require('../settings')
 const { CLI_VERSION } = settings
 const transforms = require('./transforms')
-const { loginFlags, isRemoteSession, atLeast } = require('./login')
+const { loginFlags, isRemoteSession, atLeast, portalRegionFromHeaders } = require('./login')
 const regions = require('./regions')
 const log = require('../log')
 
@@ -245,6 +245,29 @@ const readSsoToken = async ({ ssoSession, startUrl }) => {
 	return token
 }
 
+/**
+ * Looks up the SSO region of a portal from the headers of its start page (one HTTPS request, no AWS call).
+ * Returns null when the page cannot be reached or names no region.
+ *
+ * @param  {String} startUrl	e.g., 'https://acme.awsapps.com/start/#/'
+ * @param  {Number} timeoutMs
+ * @return {String}				e.g., 'ap-southeast-2', or null
+ */
+const detectSsoRegion = async (startUrl, { timeoutMs = 5000 } = {}) => {
+	const started = Date.now()
+	try {
+		const url = new URL(startUrl)
+		url.hash = ''
+		const res = await fetch(url, { redirect:'follow', signal:AbortSignal.timeout(timeoutMs) })
+		await res.body?.cancel()
+		const region = portalRegionFromHeaders([res.headers.get('link'), res.headers.get('content-security-policy')])
+		log.info(`SSO region of ${url} → ${region || 'not found'} (HTTP ${res.status} in ${Date.now() - started}ms)`)
+		return region
+	} catch(err) {
+		return log.tolerated(`SSO region lookup of ${startUrl}`, null)(err)
+	}
+}
+
 const listSsoAccounts = async (accessToken, region) => {
 	const data = await run('aws', ['sso', 'list-accounts', '--access-token', accessToken, '--region', region, '--output', 'json'])
 	return (JSON.parse(data).accountList || []).map(a => ({ accountId:a.accountId, accountName:a.accountName }))
@@ -438,6 +461,7 @@ module.exports = {
 	awsLogin,
 	logoutAll,
 	readSsoToken,
+	detectSsoRegion,
 	listSsoAccounts,
 	listSsoRoles,
 	getSsoLoginStatus,

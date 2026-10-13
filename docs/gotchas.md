@@ -111,7 +111,9 @@ After legacy SSO profiles are upgraded to `[sso-session]`, the AWS CLI stores th
 
 ### `Invalid start url provided` means a wrong SSO region
 
-`aws configure sso` (and `aws sso-oidc`) answer a correct start URL sent to the wrong SSO region with `InvalidRequestException … error_description: Invalid start url provided` (sometimes just `Invalid request`). It points at the URL, but the region is wrong: use the region of the IAM Identity Center instance. A trailing `/` on the start URL is fine. `switch-profile add` explains this and lists the regions of the portals already set up.
+`aws configure sso` (and `aws sso-oidc`) answer a correct start URL sent to the wrong SSO region with `InvalidRequestException … error_description: Invalid start url provided` (sometimes just `Invalid request`). It points at the URL, but the region is wrong: use the region of the IAM Identity Center instance. A trailing `/` (or `#/`) on the start URL is fine. `aws sso login` reports the same mistake as `InvalidRequestException … StartDeviceAuthorization … error_description: Invalid request`.
+
+`switch-profile add` explains this and lists the regions of the portals already set up. It also reads the portal's region from its start page: the region picker for a new portal starts on it, a failed login (import or switch) offers to switch to it, and `sp portals` flags and fixes a mismatch. That lookup relies on an undocumented header, so it is only ever proposed, never applied silently.
 
 ## Shell support
 

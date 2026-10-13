@@ -25,7 +25,9 @@ switch-profile/
 │   │   ├── common.js         # preflight, loadState, CancelError/ask, describe, loginState
 │   │   ├── switch.js         # home screen loop, connect (identity check + login), switchTo, sp offer
 │   │   ├── login-flow.js     # the SSO login screen (device code, clipboard, QR, timer)
-│   │   └── index.js          # use, status, login, logout, add (+ SSO import), remove, rename, settings
+│   │   ├── portals.js        # SSO portals: list, region check, edit page, region fix after a failed login
+│   │   ├── recovery.js       # the error screen: explains a failure and offers a fix, retry or back
+│   │   └── index.js          # use, status, login, logout, add (+ SSO import), remove, rename, portals, settings
 │   ├── ui.js                 # colors (util.styleText), symbols, isInteractive, CliError, spinners
 │   ├── home.js               # the home screen prompt: search, profile list, always-visible action bar
 │   ├── rank.js               # fuzzy search (fuzzysort), frecency, PROD detection, query resolution
@@ -84,9 +86,11 @@ It also sets `AWS_CLI_AGENT_TOOLKIT_HINT_DISABLED=true`, so `aws configure sso` 
 | File | Contents |
 |------|----------|
 | `common.js` | `preflight()` (AWS CLI v2 check, `runMigrations`, legacy SSO offer when interactive, rewrite of an outdated `sp` block), `loadState()` (profiles, default profile, settings), `ask()` (clack cancel to `CancelError`), `describe()` (role · account · region), `loginState()` (SSO status text and `needsLogin`), `loginKey()` (key of `settings.logins`). |
-| `switch.js` | `switchCommand` (default command), `homeLoop()` (home screen, then a page per action and back; Esc in a page goes back, a switch ends the session; its decisions are the pure `routeChoice()` and `afterPage()`), the status header and env warnings, `pick()` (the home screen fed by `rank.rankProfiles`), `connect()` (identity check, login, retry), `switchTo()` (write default, record usage, hand to `sp`, warnings, output), `offerShortcut()`, `enableShortcut()`. |
-| `login-flow.js` | `ssoLogin()` (interactive login screen, or `plainLogin()` passthrough when non-interactive) and `rememberLogin()`. |
-| `index.js` | `use`, `status`, `login`, `logout`, `add` and `importFromSso`, `remove`, `rename`, `settings`. Exports the command map used by `src/cli.js` and by the home screen's actions. |
+| `switch.js` | `switchCommand` (default command), `homeLoop()` (home screen, then a page per action and back; Esc in a page goes back, a switch ends the session; its decisions are the pure `routeChoice()` and `afterPage()`), `withRecovery()` (runs a page or a switch, and opens the error screen on an expected failure), the status header and env warnings, `pick()` (the home screen fed by `rank.rankProfiles`), `connect()` (identity check, login, retry), `switchTo()` (write default, record usage, hand to `sp`, warnings, output), `offerShortcut()`, `enableShortcut()`. |
+| `login-flow.js` | `ssoLogin()` (interactive login screen, or `plainLogin()` passthrough when non-interactive) and `rememberLogin()`. A failed login's `CliError` carries `target` and `wrongRegion`. |
+| `portals.js` | `listPortals()` (sessions, their profiles, optionally the region read from each portal page), `updatePortal()`, `editPortal()` (the portal page), `fixSsoRegion()` (used by the import), validators. |
+| `recovery.js` | `recover()` (the error screen), and the pure `portalOfError()` and `recoveryOptions()`. |
+| `index.js` | `use`, `status`, `login`, `logout`, `add` and `importFromSso`, `remove`, `rename`, `portals`, `settings`. Exports the command map used by `src/cli.js` and by the home screen's actions. |
 
 ### `src/ui.js`
 
@@ -117,9 +121,9 @@ Tool state and the storage format history; migrations keyed off `formatVersion`.
 
 ### `src/aws/`
 
-- `index.js`: reads the AWS files, writes them atomically, backs them up, runs the AWS CLI (`sts get-caller-identity`, `sso login` args, `login`, `sso logout`, `sso list-accounts`, `sso list-account-roles`, `configure sso`), reads the SSO token cache, caches `aws --version` in the settings file.
+- `index.js`: reads the AWS files, writes them atomically, backs them up, runs the AWS CLI (`sts get-caller-identity`, `sso login` args, `login`, `sso logout`, `sso list-accounts`, `sso list-account-roles`, `configure sso`), reads the SSO token cache, reads a portal's SSO region from its start page (`detectSsoRegion`, the only request not made by the AWS CLI), caches `aws --version` in the settings file.
 - `transforms.js`: pure. `[default]` rules, 1.x detection, legacy SSO upgrade, profile listing with kinds, SSO import (`populateSsoProfiles`), `renameProfile`.
-- `login.js`: pure. `isRemoteSession`, `resolveLoginMode`, `loginFlags`, `parseLoginOutput`, `configureSsoFailure` (message and hint for a failed `aws configure sso`), `atLeast`.
+- `login.js`: pure. `isRemoteSession`, `resolveLoginMode`, `loginFlags`, `parseLoginOutput`, `configureSsoFailure` (message and hint for a failed `aws configure sso`), `isWrongSsoRegion`, `portalRegionFromHeaders`, `atLeast`.
 
 ### `src/ini.js`, `src/core.js`
 
@@ -134,7 +138,8 @@ The diagnostic log (format in [Configuration Files](configuration-files.md#switc
 - `src/aws/index.js` functions mostly return `[errors, result]` tuples (`catchErrors`); commands turn them into a `CliError` with `ui.cliErrorFrom(errors, options)`, which keeps the original errors attached for the log.
 - A `CliError` built from a caught error passes it as `cause`, so the log shows what really failed (for example the AWS CLI output behind `Could not list the accounts`).
 - Failures that are tolerated use `.catch(log.tolerated('<what>', fallback))` instead of a silent `.catch(() => …)`. Silent catches remain only for expected misses (a file or token that does not exist).
-- Every error a command ends with, every error shown on a home screen page, and every crash is written to the log; on screen, exit-code-1 errors end with `Details: ~/.switch-profile/switch-profile.log`.
+- Expected errors on the home screen (a page or a switch) open the error screen (`src/commands/recovery.js`) and wait for a choice; they never just scroll away under a redrawn home screen.
+- Every error a command ends with, every error shown on the error screen, and every crash is written to the log; on screen, exit-code-1 errors end with `Details: ~/.switch-profile/switch-profile.log`.
 - Commands throw `CliError` for expected failures (message, hint, exit code 2 or 3) and `CancelError` for cancelled prompts.
 - `migrate.NewerFormatError` becomes a `CliError` in `preflight()`.
 
@@ -164,7 +169,9 @@ sp (shell function)                 creates temp file, sets SWITCH_PROFILE_SHELL
 ```
 add → importFromSso
   ├─ choose or create [sso-session]       transforms.listSsoSessions / addSsoSession → write config
+  │                                        (new: region picker starts on aws.detectSsoRegion)
   ├─ aws.readSsoToken                      ~/.aws/sso/cache/sha1(session).json; none → ssoLogin
+  │                                        wrong region → portals.fixSsoRegion (saves) → retry
   ├─ aws.listSsoAccounts + listSsoRoles    6 role lookups in parallel
   ├─ region + prefix
   ├─ transforms.populateSsoProfiles        preview (prune: false)

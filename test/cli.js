@@ -117,6 +117,22 @@ region = us-west-2
 		assert.equal(run(['remove', 'acme-prod', '--yes']).code, 3, 'the current default cannot be removed')
 	})
 
+	it('Should list and edit SSO portals without prompting', () => {
+		const list = JSON.parse(run(['portals', '--json']).out)
+		const acme = list.portals.find(x => x.name == 'acme')
+		assert.include(acme, { name:'acme', startUrl:'https://acme.awsapps.com/start', region:'us-east-1' })
+		assert.includeMembers(acme.profiles, ['acme-prod', 'acme-dev'])
+		assert.equal(run(['portals', 'nope', '--json']).code, 3)
+		assert.equal(run(['portals', '--region', 'eu-west-1']).code, 3, 'the portal name is required')
+		assert.equal(run(['portals', 'acme', '--region', 'mars-1']).code, 3)
+		assert.equal(run(['portals', 'acme', '--start-url', 'http://insecure']).code, 3)
+		const r = run(['portals', 'acme', '--region', 'eu-west-1', '--json'])
+		assert.equal(r.code, 0, r.err)
+		assert.include(JSON.parse(r.out), { name:'acme', region:'eu-west-1' })
+		assert.match(config(), /\[sso-session acme\]\nsso_start_url = https:\/\/acme.awsapps.com\/start\nsso_region = eu-west-1/)
+		assert.equal(run(['portals', 'acme', '--region', 'us-east-1']).code, 0)
+	})
+
 	it('Should rename a profile and keep it the default', () => {
 		assert.equal(run(['rename', 'acme-prod']).code, 3, 'the new name is required without a terminal')
 		assert.equal(run(['rename', 'acme-prod', 'acme-dev']).code, 3, 'name taken')

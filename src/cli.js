@@ -20,6 +20,7 @@ Examples:
   $ sp login                    log in again now (device code over SSH)
   $ sp add                      import every account of an SSO portal
   $ sp rename <profile> <new>   give a profile a friendlier name
+  $ sp portals                  check or fix an SSO portal's start URL and region
   $ switch-profile status --json
 
 'sp' is the shortcut switch-profile installs on first use (or from Settings). It also
@@ -99,6 +100,11 @@ const main = argv => {
 		.action(run(opts => commands.add([], opts)))
 	program.command('remove').alias('rm').argument('[profiles...]').description('remove profiles').option('-y, --yes', 'do not ask for confirmation').action(run(commands.remove))
 	program.command('rename').alias('mv').argument('[profile]').argument('[new-name]').description('rename a profile').action(run(commands.rename))
+	program.command('portals').alias('portal').argument('[name]', 'the [sso-session] to edit').description('list SSO portals, check their region, and edit the start URL or region')
+		.option('--region <region>', 'set the SSO region (where IAM Identity Center lives)')
+		.option('--start-url <url>', 'set the start URL')
+		.option('--check', 'with --json or no terminal: also read each portal\'s region from its start page')
+		.action(run(commands.portals))
 	program.command('settings').description('per-terminal switching, login mode and more').action(run(opts => commands.settings([], opts)))
 	// 1.x compatibility: 'switch-profile switch'.
 	program.command('switch', { hidden:true }).action(run(opts => commands.switch('', opts)))

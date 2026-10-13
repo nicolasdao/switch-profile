@@ -21,7 +21,7 @@ npx switch-profile
 │  ○ globex-dev      ReadOnly  333333333333  us-east-1
 │  ○ initech-dev     Admin     444444444444  eu-west-1
 │
-│  [Log in] [Add] [Rename] [Remove] [Log out] [Settings]
+│  [Log in] [Add] [Portals] [Rename] [Remove] [Log out] [Settings]
 └  ↑↓ choose · enter switch · tab actions · esc quit
 ```
 
@@ -100,8 +100,9 @@ No profiles yet? `switch-profile` starts the **Add profiles** flow. To import ev
 Running `sp` (or `npx switch-profile`) with no arguments opens the home screen:
 
 - **Type and press Enter** to switch. That's the whole path for everyday use.
-- **Tab** moves to the action bar below the list, which is always visible however many profiles you have: **Log in**, **Add**, **Rename**, **Remove**, **Log out**, **Settings**. Use ←→ to choose and Enter to open.
+- **Tab** moves to the action bar below the list, which is always visible however many profiles you have: **Log in**, **Add**, **Portals**, **Rename**, **Remove**, **Log out**, **Settings**. Use ←→ to choose and Enter to open.
 - **Every action opens as a page and comes back** to the home screen when it's done. **Esc** goes back from a page, and quits from the home screen.
+- **When something fails, it stops and tells you.** An error screen says what failed, what AWS answered, why, and which SSO portal (start URL and region) was involved. Then it asks what to do: fix the portal's region in one step, edit the portal, try again, or go back.
 - A switch ends the session, which is what lets `sp` set `AWS_PROFILE` in your terminal.
 
 ## Commands
@@ -117,6 +118,7 @@ Running `sp` (or `npx switch-profile`) with no arguments opens the home screen:
 | `add --from-sso [session]` | Imports or re-syncs every account and role of an `[sso-session]`. Options: `--region`, `--prefix`, `--prune`, `--yes`. |
 | `rename [profile] [new-name]` | Renames a profile (alias `mv`), for example an imported `acme-prod-workloads-administratoraccess` to `acme-prod`. Also updates `source_profile` references, the default profile and the home screen order. SSO logins are kept. Scripts, terminals and tools that use the old name need the new one. |
 | `remove [profiles...] [--yes]` | Removes profiles (alias `rm`). The current default cannot be removed. |
+| `portals [name]` | Lists your SSO portals (`[sso-session]`) and edits one in place: start URL and SSO region (alias `portal`). Flags a portal whose region differs from the one its portal page names, and fixes it in one step. `--region` / `--start-url` edit without prompting; `--json` lists them (`--check` adds the region read from each portal). |
 | `settings` | Per-terminal switching, SSO login mode, legacy SSO upgrade. |
 
 Global options: `--json`, `--no-input` (never prompt), `--debug` (show stack traces), `-v, --version`. Every run, AWS CLI call and error is logged to `~/.switch-profile/switch-profile.log` (secrets redacted). In examples, `sp` and `switch-profile` are interchangeable; only `sp` changes the current terminal.
@@ -241,6 +243,8 @@ The SSO region is wrong. It must be the region of your IAM Identity Center insta
 ### `Invalid start url provided` when adding an SSO profile
 
 The start URL is usually fine: AWS sends this error when the **SSO region** is wrong. Use the region where IAM Identity Center lives (Identity Center console › Settings), not where you deploy. If the portal is already set up, type its existing session name instead (`sp add` lists them with their regions).
+
+When importing from a portal (`sp add` > Accounts from an SSO portal) or switching to one of its profiles, the same mistake shows as `Invalid request` during the login. `switch-profile` reads the portal's real region from its start page and offers to fix the saved portal. You can also check and fix every portal any time with `sp portals` (or **Portals** on the home screen).
 
 ### Something failed and the message is not enough
 

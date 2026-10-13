@@ -1,5 +1,5 @@
 const { assert } = require('chai')
-const { loginFlags, resolveLoginMode, parseLoginOutput, configureSsoFailure } = require('../src/aws/login')
+const { loginFlags, resolveLoginMode, parseLoginOutput, configureSsoFailure, isWrongSsoRegion, portalRegionFromHeaders } = require('../src/aws/login')
 
 describe('login', () => {
 	const ssh = { SSH_CONNECTION:'1.2.3.4 5 6.7.8.9 22' }
@@ -43,5 +43,17 @@ describe('login', () => {
 		assert.equal(other.message, 'aws configure sso failed: Something else broke')
 		assert.equal(other.hint, 'Run sp add to try again.')
 		assert.equal(configureSsoFailure('', []).message, 'aws configure sso failed.')
+	})
+	it('Should recognise how AWS reports a wrong SSO region', () => {
+		assert.isTrue(isWrongSsoRegion('aws: [ERROR]: An error occurred (InvalidRequestException) when calling the StartDeviceAuthorization operation:\n\nerror: invalid_request\nerror_description: Invalid request'))
+		assert.isTrue(isWrongSsoRegion('error_description: Invalid start url provided'))
+		assert.isFalse(isWrongSsoRegion('An error occurred (InvalidGrantException) when calling the CreateToken operation: invalid_grant'))
+		assert.isFalse(isWrongSsoRegion(undefined))
+	})
+	it('Should read the SSO region from the headers of a portal page', () => {
+		assert.equal(portalRegionFromHeaders(['<https://portal.sso.ap-southeast-2.amazonaws.com/>; rel=preconnect; crossorigin']), 'ap-southeast-2')
+		assert.equal(portalRegionFromHeaders([null, 'frame-ancestors \'none\'; connect-src https://portal.sso.us-gov-west-1.amazonaws.com']), 'us-gov-west-1')
+		assert.equal(portalRegionFromHeaders(['<https://cdn.example.com/>; rel=preconnect']), null)
+		assert.equal(portalRegionFromHeaders(), null)
 	})
 })

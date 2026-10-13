@@ -11,8 +11,9 @@ const migrate = require('../migrate')
 const rank = require('../rank')
 const { resolveLoginMode, isRemoteSession, configureSsoFailure } = require('../aws/login')
 const ui = require('../ui')
-const { ask, preflight, loadState, loginKey, describe, loginState, upgradeLegacySso } = require('./common')
+const { ask, preflight, loadState, loginKey, describe, loginState, upgradeLegacySso, chooseRegion } = require('./common')
 const { ssoLogin, rememberLogin } = require('./login-flow')
+const portals = require('./portals')
 const { switchCommand, switchTo, connect, enableShortcut, exportHint } = require('./switch')
 
 const intro = opts => {
@@ -125,13 +126,6 @@ const logout = async (args, opts) => {
 	await settings.update({ logins:{} })
 	p.outro(`${ui.ok(ui.sym.ok)} Logged out ${ui.unicode ? '👋' : ''}${isRemoteSession(process.env, process.platform) ? ui.dim(' This machine no longer has AWS access.') : ''}`)
 }
-
-const chooseRegion = async (message, initialValue) => ask(p.autocomplete({
-	message,
-	maxItems: 8,
-	initialValue,
-	options: aws.regions.map(r => ({ value:r.code, label:r.code, hint:r.name }))
-}))
 
 const validateProfileName = taken => value => {
 	if (!value)
@@ -252,8 +246,9 @@ const importFromSso = async (state, opts) => {
 			]
 		})) : '__new__'
 		if (choice == '__new__') {
-			const startUrl = await ask(p.text({ message:'SSO start URL', placeholder:'https://acme.awsapps.com/start', validate: v => /^https:\/\/\S+$/.test(v || '') ? undefined : 'Enter the https:// start URL of the portal.' }))
-			const region = await chooseRegion(`SSO region ${ui.dim('(where IAM Identity Center lives)')}`, 'us-east-1')
+			const startUrl = (await ask(p.text({ message:'SSO start URL', placeholder:'https://acme.awsapps.com/start', validate:portals.validateStartUrl }))).trim()
+			const detected = await aws.detectSsoRegion(startUrl)
+			const region = await chooseRegion(`SSO region ${ui.dim(detected ? `(where IAM Identity Center lives: ${detected}, read from the portal)` : '(where IAM Identity Center lives)')}`, detected || 'us-east-1')
 			const suggested = transforms.sessionNameFromUrl(startUrl).replace(/[^a-zA-Z0-9_-]/g, '-')
 			sessionName = await ask(p.text({ message:`Short name for this portal ${ui.dim('(usually the client)')}`, initialValue:suggested, validate: v => !/^[a-zA-Z0-9_-]+$/.test(v || '') ? 'Letters, numbers, - and _ only.' : sessions.some(s => s.name == v) ? `${v} already exists.` : undefined }))
 			configStr = transforms.addSsoSession(configStr, { name:sessionName, startUrl, region, version:settings.CLI_VERSION })
@@ -261,13 +256,24 @@ const importFromSso = async (state, opts) => {
 		} else
 			sessionName = choice
 	}
-	const session = transforms.listSsoSessions(configStr).find(s => s.name == sessionName)
+	let session = transforms.listSsoSessions(configStr).find(s => s.name == sessionName)
 
 	let token = await aws.readSsoToken({ ssoSession:sessionName })
 	if (!token) {
 		if (!interactive)
 			throw new ui.CliError(`Not logged in to ${sessionName}.`, { code:2, hint:`Run: aws sso login --sso-session ${sessionName}` })
-		await ssoLogin({ ssoSession:sessionName }, { label:sessionName, loginKey:sessionName, interactive })
+		for (;;) {
+			try {
+				await ssoLogin({ ssoSession:sessionName }, { label:sessionName, loginKey:sessionName, interactive })
+				break
+			} catch(err) {
+				if (!err.wrongRegion)
+					throw err
+				const region = await portals.fixSsoRegion(session, err)
+				configStr = (await aws.getConfigFile())[1] || configStr
+				session = { ...session, sso_region:region }
+			}
+		}
 		token = await aws.readSsoToken({ ssoSession:sessionName })
 		if (!token)
 			throw new ui.CliError(`Logged in, but no token was found for ${sessionName}.`)
@@ -446,6 +452,60 @@ const rename = async (from, to, opts) => {
 	p.outro(ui.dim(`Other terminals, scripts and tools that use ${from} (AWS_PROFILE or --profile) need the new name.`))
 }
 
+/**
+ * 'switch-profile portals [name]': lists the SSO portals and edits one (start URL, SSO region).
+ * With --region or --start-url, edits without prompting.
+ */
+const portalsCommand = async (name, opts) => {
+	const interactive = await begin(opts)
+	const state = await loadState()
+
+	if (opts.region || opts.startUrl) {
+		if (!name)
+			throw new ui.CliError('Which portal?', { code:3, hint:'Run: switch-profile portals <name> --region <region>' })
+		const invalid = (opts.region && portals.validateRegion(opts.region)) || (opts.startUrl && portals.validateStartUrl(opts.startUrl))
+		if (invalid)
+			throw new ui.CliError(invalid, { code:3 })
+		await portals.findPortal(state, name)
+		await portals.updatePortal(name, { region:opts.region, startUrl:opts.startUrl })
+		const portal = await portals.findPortal(state, name)
+		if (opts.json)
+			return void process.stdout.write(JSON.stringify(portal) + '\n')
+		p.log.success(`Saved ${ui.accent(name)}: ${ui.join([portal.startUrl, portal.region])}`)
+		return p.outro(ui.dim(`Log in again: switch-profile login <a ${name} profile>`))
+	}
+
+	if (!interactive || opts.json) {
+		const list = await portals.listPortals(state, { detect:!!opts.check })
+		const selected = name ? list.filter(x => x.name == name) : list
+		if (name && !selected.length)
+			await portals.findPortal(state, name)
+		if (opts.json)
+			return void process.stdout.write(JSON.stringify({ portals:selected }) + '\n')
+		for (const x of selected)
+			console.log(`${x.name}\t${x.region || '-'}\t${x.startUrl || '-'}\t${x.profiles.length} profiles${opts.check ? `\tportal says ${x.detectedRegion || '?'}` : ''}`)
+		return
+	}
+
+	if (!name) {
+		const spin = ui.spinner()
+		spin.start('Reading the portals')
+		const list = await portals.listPortals(state, { detect:true })
+		spin.stop(`${list.length} SSO portal${list.length == 1 ? '' : 's'}`)
+		if (!list.length)
+			return p.outro(ui.dim('No SSO portals yet. Add one with Add › Accounts from an SSO portal.'))
+		const picked = await ask(p.select({
+			message: 'Which portal?',
+			options: list.map(x => ({ value:x.name, label:x.name, hint:portals.portalHint(x) }))
+		}))
+		const { changed } = await portals.editPortal(picked, state, { detectedRegion:list.find(x => x.name == picked).detectedRegion })
+		return p.outro(ui.dim(changed ? 'Saved.' : 'Nothing changed.'))
+	}
+	await portals.findPortal(state, name)
+	const { changed } = await portals.editPortal(name, state)
+	p.outro(ui.dim(changed ? 'Saved.' : 'Nothing changed.'))
+}
+
 const LOGIN_MODE_LABELS = {
 	auto: 'Auto: device code over SSH, browser otherwise',
 	device: 'Always device code (approve from any device)',
@@ -516,5 +576,6 @@ module.exports = {
 	add,
 	remove,
 	rename,
+	portals: portalsCommand,
 	settings: settingsCommand
 }

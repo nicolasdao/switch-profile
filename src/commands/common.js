@@ -135,8 +135,19 @@ const loginState = async (profile, state) => {
 	return { text: ui.warn(s == 'expired' ? 'SSO login expired' : 'not logged in'), needsLogin:true }
 }
 
+/**
+ * Region picker (type to search).
+ */
+const chooseRegion = async (message, initialValue) => ask(p.autocomplete({
+	message,
+	maxItems: 8,
+	initialValue,
+	options: aws.regions.map(r => ({ value:r.code, label:r.code, hint:r.name }))
+}))
+
 module.exports = {
 	CancelError,
+	chooseRegion,
 	ask,
 	preflight,
 	upgradeLegacySso,

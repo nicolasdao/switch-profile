@@ -15,6 +15,7 @@ const log = require('../log')
 const { ask, preflight, loadState, loginKey, describe, loginState, CancelError } = require('./common')
 const { ssoLogin } = require('./login-flow')
 const { home, ACTION_PREFIX } = require('../home')
+const { recover } = require('./recovery')
 
 const header = async (state, { warnings } = {}) => {
 	p.intro(`${ui.badge('switch-profile')} ${ui.dim(settings.CLI_VERSION)}`)
@@ -54,6 +55,7 @@ const warnEnv = () => {
 const ACTIONS = [
 	{ key:'login', label:'Log in' },
 	{ key:'add', label:'Add' },
+	{ key:'portals', label:'Portals' },
 	{ key:'rename', label:'Rename' },
 	{ key:'remove', label:'Remove' },
 	{ key:'logout', label:'Log out' },
@@ -230,6 +232,8 @@ const runAction = async (key, state, opts) => {
 		return commands.login(state.defaultName, { ...opts, fromPicker:true })
 	if (key == 'rename')
 		return commands.rename(null, null, { ...opts, fromPicker:true })
+	if (key == 'portals')
+		return commands.portals(null, { ...opts, fromPicker:true })
 	return commands[key](opts.args || [], { ...opts, fromPicker:true })
 }
 
@@ -248,13 +252,53 @@ const routeChoice = choice => {
 /**
  * Pure: what happens after a page ran.
  *
- * @return {String} 'exit' (the page switched profile), 'back' (Esc in the page), 'error' (expected failure,
- *                  shown, then home), 'home' (page finished), or 'throw' (unexpected error)
+ * @return {String} 'exit' (the page switched profile), 'back' (Esc in the page), 'error' (expected failure:
+ *                  the error screen), 'home' (page finished), or 'throw' (unexpected error)
  */
 const afterPage = (result, err) => {
 	if (err)
 		return err instanceof CancelError ? 'back' : err instanceof ui.CliError ? 'error' : 'throw'
 	return result && result.switched ? 'exit' : 'home'
+}
+
+const findOrFail = (state, name) => {
+	const profile = state.profiles.find(x => x.name == name)
+	if (!profile)
+		throw new ui.CliError(`There is no profile named ${name} any more.`, { code:3 })
+	return profile
+}
+
+/**
+ * Runs a page or a switch. An expected failure opens the error screen (src/commands/recovery.js), which
+ * explains it and offers a fix; 'retry' runs it again with a fresh state. Esc goes back.
+ *
+ * @param  {Function} run				state => result
+ * @param  {Boolean}  options.exitOnCancel	Ctrl+C or Esc ends the session instead of going back (a switch: the
+ *											profile may already be switched when a later prompt is cancelled)
+ * @return {Object}							The result, or undefined when the user went back
+ */
+const withRecovery = async (run, state, what, { exitOnCancel } = {}) => {
+	for (;;) {
+		let result, error
+		try {
+			result = await run(state)
+		} catch(err) {
+			error = err
+		}
+		const next = afterPage(result, error)
+		if (next == 'exit' || next == 'home')
+			return result
+		if (next == 'throw' || (next == 'back' && exitOnCancel))
+			throw error
+		if (next == 'back') {
+			p.cancel(ui.dim(`${ui.unicode ? '←' : '<-'} Back`))
+			return
+		}
+		state = await loadState()
+		if (await recover(error, state, what) != 'retry')
+			return
+		state = await loadState()
+	}
 }
 
 /**
@@ -270,26 +314,11 @@ const homeLoop = async (state, opts, initialQuery) => {
 			p.outro(ui.dim(`Bye ${ui.unicode ? '👋' : ''}`))
 			return
 		}
-		if (route.type == 'switch')
-			return switchTo(state.profiles.find(x => x.name == route.name), state, opts)
-
-		let result, error
-		try {
-			result = await runAction(route.key, state, opts)
-		} catch(err) {
-			error = err
-		}
-		const next = afterPage(result, error)
-		if (next == 'exit')
+		const result = route.type == 'switch'
+			? await withRecovery(s => switchTo(findOrFail(s, route.name), s, opts), state, `switch to ${route.name}`, { exitOnCancel:true })
+			: await withRecovery(s => runAction(route.key, s, opts), state, route.key)
+		if (afterPage(result) == 'exit')
 			return result
-		if (next == 'throw')
-			throw error
-		if (next == 'back')
-			p.cancel(ui.dim(`${ui.unicode ? '←' : '<-'} Back`))
-		if (next == 'error') {
-			log.error(`${route.key} failed (back to the home screen)`, error)
-			ui.printError(error)
-		}
 		state = await loadState()
 	}
 }
@@ -313,9 +342,14 @@ const switchCommand = async (query, opts) => {
 	if (query) {
 		const { profile, candidates } = rank.resolveQuery(state.profiles, query, { usage:state.settings.usage, current:state.defaultName })
 		if (profile) {
-			if (!opts.json && interactive)
-				p.intro(`${ui.badge('switch-profile')} ${ui.dim(settings.CLI_VERSION)}`)
-			return switchTo(profile, state, { ...opts, interactive })
+			if (!interactive || opts.json)
+				return switchTo(profile, state, { ...opts, interactive })
+			p.intro(`${ui.badge('switch-profile')} ${ui.dim(settings.CLI_VERSION)}`)
+			// A failed switch opens the error screen; going back from it opens the home screen.
+			const result = await withRecovery(s => switchTo(findOrFail(s, profile.name), s, { ...opts, interactive }), state, `switch to ${profile.name}`, { exitOnCancel:true })
+			if (result)
+				return result
+			return homeLoop(await loadState(), { ...opts, interactive })
 		}
 		if (!interactive) {
 			throw new ui.CliError(candidates.length ? `"${query}" matches ${candidates.length} profiles.` : `No profile matches "${query}".`, {

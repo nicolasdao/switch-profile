@@ -255,7 +255,7 @@ Diagnostic log, written by `src/log.js`. Plain text, one entry per line, appende
 |-------|------|
 | `run …` | Every run: version, arguments, Node, platform, TTY, SSH, shell and whether it came through `sp` |
 | `exec …` | Every AWS CLI (or other) child process: arguments, exit code, duration; `WARN` with its output (last 4,000 characters) when it fails |
-| `ERROR <command> failed` | Any error a command ends with, including expected ones (exit 2 and 3), and errors shown on a home screen page before going back. The full chain: message, hint, exit code, stack, the command and its output, wrapped errors (`catchErrors`) and `cause` |
+| `ERROR <command> failed` | Any error a command ends with, including expected ones (exit 2 and 3), and errors shown on the error screen (`<what> failed (error screen)`). The full chain: message, hint, exit code, stack, the command and its output, wrapped errors (`catchErrors`) and `cause` |
 | `WARN <what> failed (ignored)` | Tolerated failures the command carries on without (`log.tolerated`), e.g. reading the `sp` status |
 | `ERROR unexpected crash` | Uncaught exceptions and unhandled rejections |
 | `exit N` | The exit code |
@@ -302,7 +302,7 @@ _switch_profile_complete() {
 	local -a items
 	items=(${(f)"$(sed -n 's/^\[profile \(.*\)\]$/\1/p' "${AWS_CONFIG_FILE:-$HOME/.aws/config}" 2>/dev/null)"})
 	if (( CURRENT == 2 )); then
-		compadd -- $items status login logout add remove settings use rename
+		compadd -- $items status login logout add remove settings use rename portals
 	elif [[ $words[2] == (remove|rm) ]] || { (( CURRENT == 3 )) && [[ $words[2] == (use|login|rename|mv) ]] }; then
 		compadd -- $items
 	fi

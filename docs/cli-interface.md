@@ -33,6 +33,7 @@ Commands are defined in `src/cli.js` (commander). `sp` passes its arguments thro
 | `add` | `--from-sso [session]`, `--region <region>`, `--prefix <prefix>`, `--prune`, `-y, --yes` |
 | `rename` / `mv` | `[profile]`, `[new-name]` |
 | `remove` / `rm` | `[profiles...]`, `-y, --yes` |
+| `portals` / `portal` | `[name]`, `--region <region>`, `--start-url <url>`, `--check` |
 | `settings` | |
 | `switch` | Hidden. 1.x compatibility, same as the default command without arguments. |
 
@@ -67,7 +68,7 @@ Errors with exit code 1 (and anything unexpected) add a pointer to the log:
   Details: ~/.switch-profile/switch-profile.log
 ```
 
-Exit codes 2 and 3 come with their own fix in the hint and skip that line; they are logged too. Every run, AWS CLI call and error is recorded in the log (see [Configuration Files](configuration-files.md#switch-profileswitch-profilelog)). `--debug` (or `SWITCH_PROFILE_DEBUG=1`, or `DEBUG=switch-profile`) also prints the stack trace on screen.
+Exit codes 2 and 3 come with their own fix in the hint and skip that line; they are logged too. On the home screen, expected errors open the [error screen](#the-error-screen) instead of ending the run. Every run, AWS CLI call and error is recorded in the log (see [Configuration Files](configuration-files.md#switch-profileswitch-profilelog)). `--debug` (or `SWITCH_PROFILE_DEBUG=1`, or `DEBUG=switch-profile`) also prints the stack trace on screen.
 
 ## Startup (every command)
 
@@ -108,7 +109,7 @@ Exit codes 2 and 3 come with their own fix in the hint and skip that line; they 
 │  ○ globex-readonly  ReadOnly    333333333333  us-east-1       PROD
 │  ○ sandbox          access keys               us-west-2
 │
-│  [Log in] [Add] [Rename] [Remove] [Log out] [Settings]
+│  [Log in] [Add] [Portals] [Rename] [Remove] [Log out] [Settings]
 └  ↑↓ choose · enter switch · tab actions · esc quit
 ```
 
@@ -126,7 +127,9 @@ When there are no rows (no match, or no profiles), the focus moves to the action
 ### Navigation
 
 - **Actions open as pages.** The home screen collapses to a breadcrumb (`◇  switch-profile › Settings`), the page runs, then the home screen comes back with a fresh status line and profile list.
-- **Esc inside a page goes back** (`└  ← Back`) to the home screen. Errors inside a page are printed and also return to the home screen.
+- **Esc inside a page goes back** (`└  ← Back`) to the home screen.
+- **Errors open the [error screen](#the-error-screen)** instead of returning to the home screen at once, both for pages and for switches (picked on the home screen or with `sp <name>`). Unexpected errors (bugs) still end the run with the error and the log path.
+- **Ctrl+C or Esc during a switch** (the login screen, the `sp` shortcut offer) ends the run, as the profile may already be switched.
 - **Esc on the home screen quits** (`└  Bye 👋`, exit 0).
 - **A successful switch ends the session**, also when it happens inside a page (e.g. "Switch to it now?" after adding a profile): `sp` can only set `AWS_PROFILE` once the process exits.
 - The environment-variable warning is shown on the first home screen only.
@@ -159,12 +162,41 @@ When there are no rows (no match, or no profiles), the focus moves to the action
 |--------|------|
 | Log in | `login` for the default profile (a fresh session, even if the current one is valid) |
 | Add | `add` |
+| Portals | `portals` (pick a portal, then edit it) |
 | Rename | `rename` (pick the profile, then edit its name) |
 | Remove | `remove` |
 | Log out | `logout` |
 | Settings | `settings` ("Done" returns to the home screen) |
 
 No profiles at all: `No AWS profiles yet. Let's add your first one ✨` and the `add` menu opens. Non-interactive: exit 3.
+
+### The error screen
+
+`src/commands/recovery.js`. When a page or a switch fails with an expected error (`CliError`), the error stays on screen and the user picks what happens next:
+
+```
+■  SSO login for happyskills failed.
+│  error: invalid_request
+│  error_description: Invalid request
+│
+│  The SSO region is most likely wrong: it must be the region where IAM Identity Center lives, not where you deploy. Check and fix it with: sp portals
+│
+│  Portal      happyskills  https://storyleaps.awsapps.com/start/#/
+│  SSO region  us-east-1  ▲ its portal page says ap-southeast-2
+│
+│  Details: ~/.switch-profile/switch-profile.log
+│
+◆  What now?
+│  ● Change the SSO region of happyskills to ap-southeast-2 (currently us-east-1)
+│  ○ Edit the portal happyskills (start URL and SSO region)
+│  ○ Try again
+│  ○ Back to the home screen
+```
+
+- The portal lines appear when the failure was an SSO login (`error.target` set by the login screen): the `[sso-session]` of the session, or of the profile that logged in.
+- The region is read from the portal page (`aws.detectSsoRegion`) only when AWS answered as it does for a wrong region (`error.wrongRegion`).
+- **Change the SSO region…** (only when the portal page names another region) saves it and tries again. **Edit the portal** opens the [portal page](#portals-name); when something changed, it tries again. **Try again** reruns the page or the switch with a fresh state. **Back** (or Esc) returns to the home screen; from `sp <name>`, that opens the home screen.
+- Every error shown here is logged (`<what> failed (error screen)`).
 
 ## Switching with arguments (`sp acme prod`)
 
@@ -243,7 +275,7 @@ Without arguments, non-interactive runs exit 3: `Which profile? Pass its name.`
 
 If the AWS CLI prints something unparseable, its raw output is shown after 10 seconds.
 
-On success: `🔓 Logged in`, and the time is remembered (`settings.logins`). On failure: `SSO login for acme failed.` with the AWS CLI's error lines; an `invalid_grant` adds a hint about the SSO region.
+On success: `🔓 Logged in`, and the time is remembered (`settings.logins`). On failure: `SSO login for acme failed.` with the AWS CLI's error lines; a wrong SSO region (`invalid_request`, `Invalid start url provided`) or an `invalid_grant` adds a hint about the SSO region.
 
 **Non-interactive**: `Logging in to acme. Approve the request using the URL and code below.` then the AWS CLI's own output, all on stderr, so `--json` stdout stays clean.
 
@@ -323,9 +355,16 @@ Then `Profile x created` and `Switch to x now?`.
 │  ○ A new portal…
 ```
 
-A new portal asks for the start URL, the SSO region (`where IAM Identity Center lives`) and a short name (suggested from the URL). It is saved as an `[sso-session]` right away.
+A new portal asks for the start URL, the SSO region (`where IAM Identity Center lives`) and a short name (suggested from the URL). The region picker starts on the region read from the portal's start page (`…: ap-southeast-2, read from the portal`), else `us-east-1`. The portal is saved as an `[sso-session]` right away.
 
-If there is no valid cached token for the session, the login screen runs. Then:
+If there is no valid cached token for the session, the login screen runs. If the login fails because the SSO region is wrong (AWS answers `invalid_request` / `Invalid start url provided`), the import offers to fix it instead of going back to the home screen:
+
+```
+▲  happyskills is set to the SSO region us-east-1, but its portal is in ap-southeast-2.
+◆  Change happyskills to ap-southeast-2 and log in again?
+```
+
+Yes updates `sso_region` of the `[sso-session]` and logs in again. No (or no region found on the portal page) opens the region picker; keeping the current region ends with the login error. Then:
 
 ```
 ◇  Found 14 accounts and 31 roles
@@ -379,6 +418,41 @@ Gives a profile a new name, typically a friendlier one than the generated `<pref
 - When this terminal's `AWS_PROFILE` is the old name, `sp` sets it to the new one. Without `sp`, a warning shows the `export` command.
 - A `credential_process` that passes `--profile <old>` is not rewritten; a warning names it.
 - `--json`: `{"from", "to", "default", "sources", "processes", "terminal"}`.
+
+## `portals [name]`
+
+Alias `portal`. SSO portals are the `[sso-session]` sections that SSO profiles share. Changing a portal's start URL or SSO region fixes every profile that uses it, with no need to remove and re-add them.
+
+Interactive, without a name: reads the region of every portal from its start page (spinner `Reading the portals`), then:
+
+```
+◆  Which portal?
+│  ● happyskills (us-east-1 · ▲ its portal is in ap-southeast-2 · 1 profile · https://storyleaps.awsapps.com/start/#/)
+│  ○ acme (ap-southeast-2 · matches the portal · 6 profiles · https://acme.awsapps.com/start)
+```
+
+The portal page (also with a name, and from the error screen):
+
+```
+●  Portal happyskills
+│  Start URL   https://storyleaps.awsapps.com/start/#/
+│  SSO region  us-east-1 · ▲ its portal is in ap-southeast-2
+│  Profiles    happyskills-dev
+│
+◆  Edit happyskills
+│  ● Change the SSO region to ap-southeast-2 (what the portal page says)
+│  ○ Start URL
+│  ○ SSO region
+│  ○ Back
+```
+
+- The first option appears only on a mismatch. `(could not read the region from the portal page)` when the page names none.
+- Each change is saved at once (`transforms.updateSsoSession`) and the page shows again; the last option becomes **Done**. After a change: `Log in to happyskills now to check it works?` (not from the error screen, which tries again instead).
+
+Non-interactive:
+
+- `portals --json`: `{"portals": [{ "name", "startUrl", "region", "profiles": [names] }]}`; `--check` adds `detectedRegion` (one HTTPS request per portal). Without `--json`, one tab-separated line per portal.
+- `portals <name> --region <region>` and/or `--start-url <https://…>`: saves without prompting (`--json` prints the portal). Unknown portal, unknown region, a non-https URL or a missing name: exit 3.
 
 ## `settings`
 
