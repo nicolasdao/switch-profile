@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-13
+
+### Added
+- Add `portals [name]` (alias `portal`) and a Portals action on the home screen to check and edit an SSO portal in place: its start URL and SSO region, for every profile that uses it, with no need to remove and re-add profiles. It flags a portal whose region differs from the one its portal page names and fixes it in one step. `--region` and `--start-url` edit without prompting; `--json` lists portals (`--check` adds the region read from each portal page)
+- Add an error screen to the home screen: when a page or a switch fails, it stays on screen with what AWS answered, why, and the SSO portal involved (start URL, region, the region its portal page names), then offers to fix the region, edit the portal, try again or go back
+
+### Changed
+- Start the SSO region picker of a new portal on the region read from the portal's start page, instead of `us-east-1`
+
+### Fixed
+- Fix importing from a portal saved with the wrong SSO region failing with `Invalid request` and returning to the home screen: the import now offers the portal's real region and logs in again. A failed login caused by a wrong region now says so instead of "Try again"
+
 ## [2.4.0] - 2026-10-11
 
 ### Added
