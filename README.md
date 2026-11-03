@@ -32,7 +32,7 @@ npx switch-profile
 - **Every terminal on its own account.** With the `sp` shortcut, each terminal keeps its own `AWS_PROFILE`, plus tab-completion of your profile names.
 - **Made for remote machines.** On a server reached over SSH, the login code lands in your laptop's clipboard, or scan a QR code with your phone.
 - **A whole client in one step.** `sp add` creates a profile for every account and role in an IAM Identity Center portal, and re-syncs it later.
-- **Scripts and AI agents welcome.** It never prompts without a terminal, offers `--json` output and stable exit codes.
+- **Scripts and AI agents welcome.** It never prompts without a terminal, offers `--json` output and stable exit codes, and ships an [agent skill](#the-agent-skill) so you can just ask for what you want.
 
 ## Built on AWS best practices
 
@@ -40,8 +40,8 @@ npx switch-profile
 
 - **Temporary credentials, not access keys.** AWS recommends that people sign in through an identity provider, such as IAM Identity Center (AWS SSO), and use short-lived credentials instead of long-lived access keys ([IAM best practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html)). `switch-profile` is built around SSO and console sign-in (`aws login`). Access keys still work, but it warns you before creating new ones.
 - **It never copies credentials.** Switching writes only a profile's *settings* into `[default]`. The AWS CLI and SDKs fetch short-lived credentials themselves and refresh them through `[sso-session]` ([AWS CLI SSO guide](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html)). There are no secrets in anything `switch-profile` writes, so nothing to leak and nothing to go stale.
-- **The AWS CLI does the logging in.** Logins run through `aws sso login` and `aws login`: browser sign-in on your machine, device code where there is no browser. `switch-profile` stores no tokens and has no telemetry. Its only network calls are the AWS CLI's own and npx fetching the package.
-- **Device codes, handled carefully.** Device-code approvals are a known phishing route, so they are used only where there is no browser, and the login screen tells you to approve only the exact code it shows.
+- **The AWS CLI does the logging in.** Logins run through `aws sso login` and `aws login`: browser sign-in on your machine, device code where there is no browser. `switch-profile` stores no tokens and has no telemetry. Its only network calls are the AWS CLI's own, npx fetching the package, and reading an SSO portal's start page to find its region.
+- **Device codes, handled carefully.** Device-code approvals are a known phishing route, so by default they are used only where there is no browser (`--device` or the `device` login mode ask for them anywhere), and the login screen tells you to approve only the exact code it shows.
 - **You always know which account you are in.** Every switch confirms the real identity with `aws sts get-caller-identity`. Production accounts are flagged in red. Environment variables that would silently override your choice (such as `AWS_ACCESS_KEY_ID`) are flagged, and `sp` clears them.
 - **One account per terminal.** `AWS_PROFILE` is scoped to a terminal, so switching in one window cannot move a deploy running in another.
 - **Careful with your files.** Edits to `~/.aws` are atomic, upgrades back up your files first, and the shell setup lives in one clearly marked block that you can remove from Settings at any time.
@@ -58,6 +58,7 @@ npx switch-profile
 - [Working on remote machines (SSH)](#working-on-remote-machines-ssh)
 - [Importing a client's accounts](#importing-a-clients-accounts)
 - [Scripts and AI agents](#scripts-and-ai-agents)
+  - [The agent skill](#the-agent-skill)
 - [Settings](#settings)
   - [The `sp` shortcut](#the-sp-shortcut)
 - [Upgrading from 1.x](#upgrading-from-1x)
@@ -112,14 +113,16 @@ Running `sp` (or `npx switch-profile`) with no arguments opens the home screen:
 | `switch-profile [profile...]` | Opens the home screen (search and switch, plus the action bar). With words: an exact name or a unique fuzzy match switches directly; otherwise the home screen opens pre-filtered (or exits 3 when non-interactive). |
 | `use <profile>` | Switches to a profile by its exact name (no fuzzy matching). |
 | `status [--json]` | Shows the default profile, its login state, and what this terminal uses. |
-| `login [profile] [--device\|--browser]` | Starts a fresh login now, even if the session is still valid. Defaults to this terminal's `AWS_PROFILE`, then the default profile. |
+| `login [profile] [--device\|--browser]` | Starts a fresh login now, even if the session is still valid. Defaults to this terminal's `AWS_PROFILE`, then the default profile. `--sso-session <portal>` logs in to a portal directly, before it has any profile. |
 | `logout [--yes]` | Ends every SSO session on this machine (`aws sso logout`, plus `aws logout --all` on AWS CLI 2.32+). |
 | `add` | Adds profiles: import accounts from an SSO portal (recommended), a single SSO profile, a console sign-in profile, or access keys. |
-| `add --from-sso [session]` | Imports or re-syncs every account and role of an `[sso-session]`. Options: `--region`, `--prefix`, `--prune`, `--yes`. |
+| `add --from-sso [session]` | Imports or re-syncs every account and role of an `[sso-session]`. Options: `--region`, `--prefix`, `--dry-run`, `--only <names>`, `--prune`, `--yes`. |
+| `add --sso <session> --name <name> --account <id> --role <role> --region <region>` | Creates one SSO profile without prompting. |
+| `add --console --name <name> --region <region>` | Creates one console sign-in profile with `aws login`, without prompting. |
 | `rename [profile] [new-name]` | Renames a profile (alias `mv`), for example an imported `acme-prod-workloads-administratoraccess` to `acme-prod`. Also updates `source_profile` references, the default profile and the home screen order. SSO logins are kept. Scripts, terminals and tools that use the old name need the new one. |
 | `remove [profiles...] [--yes]` | Removes profiles (alias `rm`). The current default cannot be removed. |
-| `portals [name]` | Lists your SSO portals (`[sso-session]`) and edits one in place: start URL and SSO region (alias `portal`). Flags a portal whose region differs from the one its portal page names, and fixes it in one step. `--region` / `--start-url` edit without prompting; `--json` lists them (`--check` adds the region read from each portal). |
-| `settings` | Per-terminal switching, SSO login mode, legacy SSO upgrade. |
+| `portals [name]` | Lists your SSO portals (`[sso-session]`) and edits one in place: start URL and SSO region (alias `portal`). Flags a portal whose region differs from the one its portal page names, and fixes it in one step. `--region` / `--start-url` edit without prompting; `--create` saves a new portal; `--json` lists them (`--check` adds the region read from each portal, or from `--start-url` for a portal not saved yet). |
+| `settings` | Per-terminal switching, SSO login mode, legacy SSO upgrade. Flags change them without prompting: `--shortcut <on\|off>`, `--login-mode <auto\|device\|browser>`, `--upgrade-legacy-sso`. |
 
 Global options: `--json`, `--no-input` (never prompt), `--debug` (show stack traces), `-v, --version`. Every run, AWS CLI call and error is logged to `~/.switch-profile/switch-profile.log` (secrets redacted). In examples, `sp` and `switch-profile` are interchangeable; only `sp` changes the current terminal.
 
@@ -163,10 +166,14 @@ sp add          # then choose "Accounts from an SSO portal"
 
 Run it again later to pick up new accounts. Account/role pairs that already have a profile are never duplicated, whatever its name. Generated profiles that no longer exist can be pruned (after a backup); profiles you wrote by hand are never pruned.
 
-Non-interactive (after `aws sso login --sso-session acme` or `sp login`):
+Non-interactive, from nothing to profiles:
 
 ```shell
-switch-profile add --from-sso acme --region eu-west-1 --prefix acme --yes --json
+switch-profile portals --check --start-url https://acme.awsapps.com/start --json      # what region does the portal name?
+switch-profile portals acme --create --start-url https://acme.awsapps.com/start --region ap-southeast-2
+switch-profile login --sso-session acme --device                                      # URL and code on stderr
+switch-profile add --from-sso acme --region eu-west-1 --prefix acme --dry-run --json  # preview
+switch-profile add --from-sso acme --region eu-west-1 --prefix acme --json            # add them (--only a,b for some)
 ```
 
 ## Scripts and AI agents
@@ -177,12 +184,12 @@ switch-profile add --from-sso acme --region eu-west-1 --prefix acme --yes --json
 |-----------|---------|
 | 0 | OK |
 | 1 | Error |
-| 2 | Login required (run `switch-profile login <profile>` in a terminal) |
+| 2 | Login required. The error's hint gives the command, usually `switch-profile login <profile>` |
 | 3 | Bad input: unknown or ambiguous profile, missing argument or `--yes` |
 | 130 | Cancelled |
 
 - `--json` prints machine-readable results on stdout. Expected errors are printed as JSON on stderr: `{"error": "...", "hint": "...", "code": 3}`.
-- `switch-profile status --json` lists every profile with its kind, account, role, region and whether it is production.
+- `switch-profile status --json` lists every profile with its kind, account, role, region, whether it is production and whether it needs a login.
 - Non-interactive logins still work: `switch-profile login acme-dev --device` prints the AWS CLI's URL and code on stderr and waits for approval.
 - A shell tool's environment does not survive between commands, so `sp` and `export AWS_PROFILE` do not help an agent. Prefix each AWS command instead:
 
@@ -190,6 +197,18 @@ switch-profile add --from-sso acme --region eu-west-1 --prefix acme --yes --json
 AWS_PROFILE=acme-dev aws s3 ls
 AWS_PROFILE=acme-dev terraform plan
 ```
+
+Everything can be done without a terminal, with two exceptions on purpose: **access keys** (the secret must not pass through a command line or an agent), and **console sign-in on a machine with no browser** (`aws login --remote` needs a code pasted into a terminal).
+
+### The agent skill
+
+```
+npx happyskills install nicolasdao/switch-aws-profile
+```
+
+[`switch-aws-profile`](.agents/skills/switch-aws-profile/SKILL.md) is a skill for AI coding agents such as Claude Code. It controls every feature of the CLI from plain language: "add the Acme accounts", "am I on prod?", "log me back in", "rename that profile". Agents pick it up on their own for AWS account and SSO requests. To be certain, say "switch AWS profile" or run `/switch-aws-profile`. It also guides setup decisions (which kind of profile, SSO region vs default region, names) and confirms before anything destructive.
+
+It needs nothing installed beyond **Node.js 20.12+ (with npx)** and the **AWS CLI v2**, which the CLI itself needs. It runs `npx --yes switch-profile@latest`, so it always uses the latest release and needs 2.6.0 or later.
 
 ## Settings
 
@@ -228,7 +247,7 @@ The old `switch-profile switch` command still works. If you run 1.x again later 
 
 ## Requirements
 
-- **Node.js 20.12 or later.** Older versions get a clear message.
+- **Node.js 20.12 or later** (`util.styleText` and the prompt library need it). Older versions get a clear message.
 - **[AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).** 2.22 or later is recommended (choice between device code and browser login); console sign-in (`aws login`) needs 2.32+.
 - **macOS and Linux** are first-class (zsh, bash, fish). **Windows PowerShell** is supported. **CMD** is limited: no `sp`, so run the `set AWS_PROFILE=<name>` command shown after each switch.
 
@@ -238,7 +257,7 @@ The published package has no runtime dependencies: everything is bundled into on
 
 ### `invalid_grant` during an SSO login
 
-The SSO region is wrong. It must be the region of your IAM Identity Center instance, not the region you deploy to. Fix `sso_region` in the `[sso-session]` section of `~/.aws/config` (or remove the portal and add it again).
+The SSO region is wrong. It must be the region of your IAM Identity Center instance, not the region you deploy to. Run `sp portals <name> --region <region>`, or `sp portals` to compare it with the region on the portal's page and fix it in one step.
 
 ### `Invalid start url provided` when adding an SSO profile
 

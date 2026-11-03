@@ -24,6 +24,7 @@
         "Working on remote machines (SSH)",
         "Importing a client's accounts",
         "Scripts and AI agents",
+        "The agent skill",
         "Settings",
         "The `sp` shortcut",
         "Upgrading from 1.x",
@@ -42,8 +43,9 @@
         "Documentation",
         "License"
       ],
-      "line_count": 296,
+      "line_count": 315,
       "links_to": [
+        ".agents/skills/switch-aws-profile/SKILL.md",
         "docs/architecture.md",
         "docs/aws-profile-management.md",
         "docs/cli-interface.md",
@@ -141,7 +143,7 @@
         "Per-terminal switching (`src/shell.js`)",
         "Profile names"
       ],
-      "line_count": 225,
+      "line_count": 227,
       "links_to": [
         "docs/configuration-files.md"
       ],
@@ -195,13 +197,14 @@
         "`logout [--yes]`",
         "`add`",
         "Import from an SSO portal",
+        "Creating one profile without prompting",
         "`remove [profiles...] [--yes]`",
         "`rename [profile] [new-name]`",
         "`portals [name]`",
         "`settings`",
         "Visual conventions"
       ],
-      "line_count": 493,
+      "line_count": 521,
       "links_to": [
         "docs/aws-profile-management.md",
         "docs/configuration-files.md"
@@ -292,10 +295,13 @@
         "The fake AWS CLI",
         "Manual testing of interactive screens",
         "Release",
+        "The agent skill",
         "Conventions"
       ],
-      "line_count": 158,
-      "links_to": [],
+      "line_count": 164,
+      "links_to": [
+        "docs/gotchas.md"
+      ],
       "over_size": false,
       "parse_error": null,
       "path": "docs/development-guide.md",
@@ -347,9 +353,10 @@
         "Tools that cannot read SSO profiles",
         "Maintainer gotchas",
         "clack's spinner exits the process on Ctrl+C",
-        "clack autocomplete re-filters function options"
+        "clack autocomplete re-filters function options",
+        "The sources need a newer Node than the published package"
       ],
-      "line_count": 167,
+      "line_count": 172,
       "links_to": [],
       "over_size": false,
       "parse_error": null,

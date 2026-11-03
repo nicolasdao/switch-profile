@@ -20,7 +20,7 @@ cd switch-profile
 npm install
 ```
 
-Node.js 20.12 or later and AWS CLI v2 are required.
+Node.js 22.12 or later (to run the sources) and AWS CLI v2 are required. The published bundle runs on Node.js 20.12 or later: see [Gotchas](gotchas.md#the-sources-need-a-newer-node-than-the-published-package).
 
 ## Running locally
 
@@ -78,7 +78,7 @@ npm run test:dist   # build, then test/cli.js against dist/cli.js
 
 | File | Covers |
 |------|--------|
-| `test/cli.js` | End to end, non-interactive: version/help, switching a keys profile with `--json`, exit 2 when a login is needed, non-interactive device login then fuzzy switch, the `sp` env file handoff, exit 3 on ambiguous/unknown input (and JSON errors), `status --json`, `add --from-sso`, `remove` with and without `--yes`, `rename` (validation, default kept, `sp` handoff, settings moved), `portals` (`--json` list, `--region` edit, exit 3 on bad input), `logout`, the log file in the temp HOME |
+| `test/cli.js` | End to end, non-interactive: version/help, switching a keys profile with `--json`, exit 2 when a login is needed, non-interactive device login then fuzzy switch, the `sp` env file handoff, exit 3 on ambiguous/unknown input (and JSON errors), `status --json`, `add --from-sso` (`--dry-run`, `--only`), `add --sso`, `add --console`, `login --sso-session`, a login that works when the role has no access, `--device` on a role profile, no `sp` offer without a terminal, `remove` with and without `--yes`, `rename` (validation, default kept, `sp` handoff, settings moved), `portals` (`--json` list, `--region` edit, `--create`, `--check --start-url`, exit 3 on bad input), `settings` flags, `logout`, the log file in the temp HOME |
 | `test/rank.js` | `PROD` detection, order (current, frecency, config order), fuzzy search across fields, `resolveQuery`, `recordUsage` |
 | `test/clipboard.js` | OSC 52 sequence and the tmux passthrough |
 | `test/shell.js` | Block add/update/remove; real `bash`/`zsh` runs: `sp` sets `AWS_PROFILE` and clears `AWS_ACCESS_KEY_ID`/`AWS_DEFAULT_PROFILE`, bash completion of profiles and subcommands (including several names after `remove`), zsh `compdef` registration (and no failure without `compinit`). Skipped when the shell is missing. |
@@ -97,9 +97,9 @@ npm run test:dist   # build, then test/cli.js against dist/cli.js
 
 `test/cli.js` runs the real `index.js` with `spawnSync`, a temporary `HOME` (with its own `~/.aws` and settings file) and `test/fixtures/bin` first in `PATH`. `test/fixtures/bin/aws` is a small Node script that:
 
-- answers `--version` (`aws-cli/2.33.17`, or `FAKE_AWS_VERSION`; below 2.22 `sso login` prints the old default device-code output), `sts get-caller-identity` (fails for SSO profiles without a cached token), `sso login` (prints device code or browser output, then writes a token to `~/.aws/sso/cache`), `sso logout`, `sso list-accounts`, `sso list-account-roles` and `configure export-credentials`;
+- answers `--version` (`aws-cli/2.33.17`, or `FAKE_AWS_VERSION`; below 2.22 `sso login` prints the old default device-code output), `sts get-caller-identity` (fails for SSO profiles without a cached token), `sso login` (prints device code or browser output, then writes a token to `~/.aws/sso/cache`), `sso logout`, `sso list-accounts`, `sso list-account-roles`, `login` (`aws login`: adds `login_session` to the profile), `configure sso` (writes what it writes once its prompts are answered) and `configure export-credentials`;
 - logs every call to `$HOME/aws-calls.log`;
-- reads `FAKE_LOGIN_DELAY` (ms before the login completes, default 2500), `FAKE_LOGIN_FAIL` (fail with `invalid_grant`) and `FAKE_SSO_REGION` (`sso login` fails with `invalid_request`, as AWS does for a wrong SSO region, unless the session's `sso_region` equals it).
+- reads `FAKE_LOGIN_DELAY` (ms before the login completes, default 2500), `FAKE_LOGIN_FAIL` (fail with `invalid_grant`, and `aws login` fails too) `FAKE_SSO_REGION` (`sso login` fails with `invalid_request`, as AWS does for a wrong SSO region, unless the session's `sso_region` equals it), `FAKE_NO_ACCESS` (`sts get-caller-identity` is refused once logged in, as for a role not assigned to the user) and `FAKE_CONFIGURE_FAIL` (`configure sso` fails with an invalid start URL).
 
 Anything else exits 2 with `fake aws: unsupported …`. Extend it when a command starts calling a new AWS CLI subcommand. The CLI tests are skipped on Windows.
 
@@ -128,7 +128,7 @@ Tips:
 
 ## Release
 
-Releases are run by the project's **`release-switch-profile`** skill (in `.agents/skills/`, linked into `.claude/skills/`). It replaces standard-version: there is no `rls` or `push` npm script any more. Ask Claude Code to "release", or invoke `/release-switch-profile [patch|minor|major|unreleased] ["note"]`.
+Releases are run by the project's **`release-switch-profile`** skill (in `.agents/skills/`, linked into `.claude/skills/`). It replaces standard-version: there is no `rls` or `push` npm script any more. Ask Claude Code to "release", or invoke `/release-switch-profile [patch|minor|major|unreleased|auto] ["note"]`.
 
 It runs these steps, stopping at the first failure:
 
@@ -145,6 +145,12 @@ It runs these steps, stopping at the first failure:
 It asks for confirmation before three steps: the release commit, the push, and the publish. `unreleased` only records your changes under `## [Unreleased]` in `CHANGELOG.md`, for the next release to pick up.
 
 To publish by hand, for example after declining the publish step, run `npm publish --access=public` (requires `npm login`). Check the result with `npx switch-profile@latest --version`. `npm run v` prints the current version, and `npm pack --dry-run` lists what would be published.
+
+## The agent skill
+
+`.agents/skills/switch-aws-profile` (linked into `.claude/skills/`) is the skill that lets an AI agent control the CLI through `npx --yes switch-profile@latest`. It is published on HappySkills as the public `nicolasdao/switch-aws-profile`, and is not part of the npm package, so it has its own version and changelog.
+
+When you add or change a command, flag, JSON field, exit code or interactive feature, update it in the same change: `references/commands.md` is its catalog and lists every interactive feature with its non-interactive equivalent. Anything a human can do in a terminal needs a flag or an explicit hand-off in `SKILL.md`. If the skill starts using a new flag, raise the minimum CLI version it states. Check it with `npx happyskills validate switch-aws-profile --json`. To ship a change, add a `CHANGELOG.md` entry to the skill, then run `npx happyskills release switch-aws-profile --workspace nicolasdao --bump <patch|minor|major> --json`. When the skill depends on a new flag, release the CLI first: the skill runs the latest published CLI, which refuses a flag it does not have yet.
 
 ## Conventions
 

@@ -109,8 +109,8 @@ The AWS CLI and SDKs ignore unknown keys.
 | Operation | Change |
 |-----------|--------|
 | Switch | The body of `[default]` is replaced by a copy of the profile's keys (minus existing `switch_profile_*` keys), then `switch_profile_name` and `switch_profile_version`. Created at the top if missing. No credentials. |
-| Import from SSO | New `[profile <prefix>-<account>-<role>]` sections (see the example). New `[sso-session]` when you add a portal. With prune: removes stale generated profiles. |
-| Single SSO profile | `aws configure sso` writes the section, then it is stamped (or upgraded to `[sso-session]` if no session name was given). |
+| Import from SSO | New `[profile <prefix>-<account>-<role>]` sections (see the example). New `[sso-session]` when you add a portal (or with `portals --create`). With prune: removes stale generated profiles. |
+| Single SSO profile | `aws configure sso` writes the section, then it is stamped (or upgraded to `[sso-session]` if no session name was given). `add --sso` writes the section itself, for an existing `[sso-session]`. |
 | Console sign-in | `[profile <name>]` with `region` and `switch_profile_version`, then `aws login` adds its own settings. |
 | Access keys | `[profile <name>]` with `region`, `output = json`, `switch_profile_version`. |
 | Remove | The profile section is removed (regex up to the next `[`). `[sso-session]` sections are kept. |

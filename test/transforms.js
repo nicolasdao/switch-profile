@@ -200,6 +200,15 @@ sso_region = eu-west-1
 		assert.notInclude(picked.config, 'acme-a-r')
 	})
 
+	it('Should give a profile the same name with or without include', () => {
+		const entries = [{ accountId:'1', accountName:'Dev', roleName:'Admin' }, { accountId:'2', accountName:'Dev', roleName:'Admin' }]
+		const base = { ssoSession:'acme', entries, region:'us-east-1', prefix:'acme', version:'2' }
+		const all = t.populateSsoProfiles('[sso-session acme]\nsso_start_url = https://a\n', base)
+		const some = t.populateSsoProfiles('[sso-session acme]\nsso_start_url = https://a\n', { ...base, include:[t.ssoEntryKey('2', 'Admin')] })
+		assert.deepEqual(all.added, ['acme-dev-admin', 'acme-dev-admin-2'])
+		assert.deepEqual(some.added, ['acme-dev-admin-2'])
+	})
+
 	it('Should name generated profiles predictably and avoid clashes', () => {
 		assert.equal(t.generatedProfileName('Acme', 'Prod  Workloads!', '1', 'AdministratorAccess'), 'acme-prod-workloads-administratoraccess')
 		const out = t.populateSsoProfiles('[sso-session acme]\nsso_start_url = https://a.awsapps.com/start\n\n[profile acme-a-r]\nregion = x\n', { ssoSession:'acme', entries:[{ accountId:'1', accountName:'A', roleName:'R' }], version:'2' })

@@ -12,6 +12,7 @@ const shell = require('../shell')
 const rank = require('../rank')
 const ui = require('../ui')
 const log = require('../log')
+const { isRemoteSession } = require('../aws/login')
 const { ask, preflight, loadState, loginKey, describe, loginState, CancelError } = require('./common')
 const { ssoLogin } = require('./login-flow')
 const { home, ACTION_PREFIX } = require('../home')
@@ -101,7 +102,7 @@ const pick = (state, initialQuery) => home({
  *
  * @return {Object} identity { account, arn, roleName }
  */
-const connect = async (profile, state, { interactive, quiet, force }) => {
+const connect = async (profile, state, { interactive, quiet, force, loggedIn, loginMode }) => {
 	const spin = quiet ? null : ui.spinner()
 	const tryIdentity = async () => {
 		if (spin)
@@ -124,15 +125,24 @@ const connect = async (profile, state, { interactive, quiet, force }) => {
 
 	const loginProfile = profile.kind == 'role' && profile.source_profile ? state.profiles.find(x => x.name == profile.source_profile) : profile
 	const canLogin = loginProfile && (loginProfile.kind == 'sso' || loginProfile.kind == 'login')
+	if (!canLogin && force)
+		throw new ui.CliError(`${profile.name} uses ${profile.source_profile ? `the source profile ${profile.source_profile}, which has` : 'credentials with'} nothing to log in to.`, { code:3 })
 	if (!canLogin)
 		throw new ui.CliError(`Could not get credentials for ${profile.name}.`, { hint: firstLine(result.message), cause:result })
+	// The caller has just logged in: another login would not help (typically, the role is not assigned to this user).
+	if (loggedIn)
+		throw new ui.CliError(`Logged in, but ${profile.name} still has no access.`, { hint: firstLine(result.message), cause:result })
 	if (!interactive && !force)
 		throw new ui.CliError(`${profile.name} needs a login.`, { code:2, hint:`Run: switch-profile login ${loginProfile.name}` })
 
+	// 'aws login --remote' waits for a code pasted on stdin, which would hang (or fail) without a terminal.
+	if (loginProfile.kind == 'login' && !interactive && isRemoteSession(process.env, process.platform))
+		throw new ui.CliError(`${loginProfile.name} needs a console sign-in, and without a browser on this machine it needs a code pasted into a terminal.`, { code:2, hint:`Run in a terminal: switch-profile login ${loginProfile.name}` })
+
 	if (loginProfile.kind == 'sso')
-		await ssoLogin({ profile:loginProfile.name }, { label:loginProfile.sso_session || loginProfile.name, loginKey:loginKey(loginProfile), interactive })
+		await ssoLogin({ profile:loginProfile.name }, { label:loginProfile.sso_session || loginProfile.name, loginKey:loginKey(loginProfile), interactive, loginMode })
 	else
-		await aws.awsLogin(loginProfile.name)
+		await aws.awsLogin(loginProfile.name, { toStderr:!interactive })
 
 	result = await tryIdentity()
 	if (result instanceof Error)
@@ -183,7 +193,7 @@ const doSwitch = async (profile, state, opts) => {
 		return
 	}
 	p.log.success(`${summary}\n${ui.dim('set as the default profile')}`)
-	await offerShortcut(profile)
+	await offerShortcut(profile, interactive)
 }
 
 const exportHint = name => process.platform == 'win32'
@@ -194,7 +204,7 @@ const exportHint = name => process.platform == 'win32'
  * After a switch without the 'sp' shortcut: explains how to scope the profile to this terminal, and offers
  * (once) to install the shortcut.
  */
-const offerShortcut = async profile => {
+const offerShortcut = async (profile, interactive) => {
 	const status = await shell.getStatus(settings.CLI_VERSION).catch(log.tolerated('reading the sp shortcut status', null))
 	const hint = `${ui.dim('To use it in this terminal only, run:')}\n   ${ui.accent(exportHint(profile.name))}`
 	if (status && status.installed) {
@@ -202,7 +212,7 @@ const offerShortcut = async profile => {
 		return
 	}
 	const current = await settings.read()
-	if (!status || !status.supported || current.perTerminalPrompted) {
+	if (!interactive || !status || !status.supported || current.perTerminalPrompted) {
 		p.outro(`${hint}${status && status.supported ? `\n${ui.dim('Tip: enable per-terminal switching in Settings.')}` : ''}`)
 		return
 	}
@@ -333,7 +343,7 @@ const switchCommand = async (query, opts) => {
 
 	if (!state.profiles.length) {
 		if (!interactive)
-			throw new ui.CliError('There are no AWS profiles yet.', { code:3, hint:'Run switch-profile add in a terminal to create one.' })
+			throw new ui.CliError('There are no AWS profiles yet.', { code:3, hint:'Add a portal and its profiles: switch-profile portals <name> --create --start-url <url> --region <region>, then login --sso-session and add --from-sso.' })
 		p.intro(`${ui.badge('switch-profile')} ${ui.dim(settings.CLI_VERSION)}`)
 		p.log.message(`No AWS profiles yet. Let's add your first one ${ui.unicode ? '✨' : ''}`)
 		return require('./index').add([], { ...opts, fromPicker:true })

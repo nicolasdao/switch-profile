@@ -9,6 +9,7 @@ const settings = require('../settings')
 const shell = require('../shell')
 const migrate = require('../migrate')
 const rank = require('../rank')
+const ini = require('../ini')
 const { resolveLoginMode, isRemoteSession, configureSsoFailure } = require('../aws/login')
 const ui = require('../ui')
 const { ask, preflight, loadState, loginKey, describe, loginState, upgradeLegacySso, chooseRegion } = require('./common')
@@ -21,10 +22,10 @@ const intro = opts => {
 		p.intro(`${ui.badge('switch-profile')} ${ui.dim(settings.CLI_VERSION)}`)
 }
 
-const begin = async (opts, { needsInput } = {}) => {
+const begin = async (opts, { needsInput, hint } = {}) => {
 	const interactive = ui.isInteractive(opts)
 	if (needsInput && !interactive)
-		throw new ui.CliError('This command is interactive.', { code:3, hint:'Run it in a terminal.' })
+		throw new ui.CliError('This command is interactive.', { code:3, hint:hint || 'Run it in a terminal.' })
 	if (!opts.fromPicker)
 		await preflight({ interactive, quiet:opts.json })
 	intro(opts)
@@ -51,6 +52,23 @@ const use = async (name, opts) => {
 }
 
 /**
+ * What 'status --json' says about each profile's login, from the SSO token cache (one read per portal).
+ *
+ * @return {Function} profile => true | false, or null when the token cache cannot tell (keys, process, console
+ *                    sign-in, and role profiles whose source is not SSO)
+ */
+const profileLoginNeeds = async profiles => {
+	const byUrl = new Map()
+	for (const x of profiles)
+		if (x.kind == 'sso' && !byUrl.has(x.sso_start_url))
+			byUrl.set(x.sso_start_url, (await loginState(x)).needsLogin)
+	return x => {
+		const source = x.kind == 'role' ? profiles.find(y => y.name == x.source_profile) : x
+		return source && source.kind == 'sso' ? byUrl.get(source.sso_start_url) : null
+	}
+}
+
+/**
  * 'switch-profile status [--json]'
  */
 const status = async (args, opts) => {
@@ -63,11 +81,12 @@ const status = async (args, opts) => {
 
 	if (opts.json) {
 		const at = d ? (state.settings.logins || {})[loginKey(d)] : null
+		const needsLogin = await profileLoginNeeds(state.profiles)
 		process.stdout.write(JSON.stringify({
-			default: d ? { name:d.name, kind:d.kind, account:d.sso_account_id, role:d.sso_role_name, region:d.region, sso_session:d.sso_session, prod:rank.isProd(d), needsLogin:login.needsLogin, loggedInAt:at || null } : null,
+			default: d ? { name:d.name, kind:d.kind, account:d.sso_account_id, role:d.sso_role_name, region:d.region, sso_session:d.sso_session, prod:rank.isProd(d), needsLogin:login.needsLogin || needsLogin(d) === true, loggedInAt:at || null } : null,
 			terminal,
 			shortcut: shortcut ? { installed:shortcut.installed, active:shortcut.active, shell:shortcut.shell.name } : null,
-			profiles: state.profiles.map(x => ({ name:x.name, kind:x.kind, account:x.sso_account_id, role:x.sso_role_name, region:x.region, sso_session:x.sso_session, prod:rank.isProd(x) }))
+			profiles: state.profiles.map(x => ({ name:x.name, kind:x.kind, account:x.sso_account_id, accountName:x.accountName, role:x.sso_role_name, region:x.region, sso_session:x.sso_session, source_profile:x.source_profile, prod:rank.isProd(x), legacySso:!!x.isLegacySso, generated:!!x.generated, needsLogin:needsLogin(x) }))
 		}, null, 2) + '\n')
 		return
 	}
@@ -89,6 +108,15 @@ const status = async (args, opts) => {
 const login = async (name, opts) => {
 	const interactive = await begin(opts)
 	const state = await loadState()
+	if (opts.ssoSession) {
+		if (name)
+			throw new ui.CliError('Pass a profile or --sso-session, not both.', { code:3 })
+		const session = (await portals.findPortal(state, opts.ssoSession)).name
+		await ssoLogin({ ssoSession:session }, { label:session, loginKey:session, interactive, loginMode:opts.device ? 'device' : opts.browser ? 'browser' : undefined })
+		if (opts.json)
+			return void process.stdout.write(JSON.stringify({ session }) + '\n')
+		return p.outro(`${ui.ok(ui.sym.ok)} Logged in to ${ui.strong(session)}`)
+	}
 	const target = name || (opts.fromPicker ? state.defaultName : process.env.AWS_PROFILE || state.defaultName)
 	if (!target)
 		throw new ui.CliError('Which profile? There is no default profile yet.', { code:3, hint:'Run: switch-profile login <profile>' })
@@ -100,10 +128,10 @@ const login = async (name, opts) => {
 	if (profile.kind == 'sso')
 		await ssoLogin({ profile:profile.name }, { label:profile.sso_session || profile.name, loginKey:loginKey(profile), interactive, loginMode })
 	else {
-		await connect(profile, state, { interactive, quiet:opts.json, force:true })
+		await connect(profile, state, { interactive, quiet:opts.json, force:true, loginMode })
 		await rememberLogin(loginKey(profile))
 	}
-	const identity = await connect(profile, state, { interactive, quiet:opts.json })
+	const identity = await connect(profile, state, { interactive, quiet:opts.json, loggedIn:true })
 	if (opts.json)
 		process.stdout.write(JSON.stringify({ profile:profile.name, account:identity.account, arn:identity.arn }) + '\n')
 	else
@@ -124,6 +152,8 @@ const logout = async (args, opts) => {
 	}
 	await aws.logoutAll()
 	await settings.update({ logins:{} })
+	if (opts.json)
+		return void process.stdout.write(JSON.stringify({ loggedOut:true }) + '\n')
 	p.outro(`${ui.ok(ui.sym.ok)} Logged out ${ui.unicode ? '👋' : ''}${isRemoteSession(process.env, process.platform) ? ui.dim(' This machine no longer has AWS access.') : ''}`)
 }
 
@@ -140,10 +170,19 @@ const validateProfileName = taken => value => {
  * 'switch-profile add [--from-sso <session>]'
  */
 const add = async (args, opts) => {
-	const interactive = await begin(opts, { needsInput: !opts.fromSso })
+	if ([opts.fromSso, opts.sso, opts.console].filter(Boolean).length > 1)
+		throw new ui.CliError('Pass only one of --from-sso, --sso and --console.', { code:3 })
+	const interactive = await begin(opts, {
+		needsInput: !opts.fromSso && !opts.sso && !opts.console,
+		hint: 'Run it in a terminal, or pass --from-sso <session>, --sso <session> or --console. Access keys can only be added in a terminal.'
+	})
 	const state = await loadState()
 	if (opts.fromSso)
 		return importFromSso(state, { ...opts, interactive })
+	if (opts.sso)
+		return addSsoProfile(state, opts)
+	if (opts.console)
+		return addConsoleProfile(state, { ...opts, interactive })
 
 	const kind = await ask(p.select({
 		message: 'What would you like to add?',
@@ -184,11 +223,7 @@ const add = async (args, opts) => {
 			p.log.info(`No session name was given, so ${name} now uses an [sso-session] for auto-refresh. You'll log in once more.`)
 	} else if (kind == 'login') {
 		const region = await chooseRegion('Default region', 'us-east-1')
-		const [configErrors, configStr] = await aws.getConfigFile()
-		if (configErrors)
-			throw ui.cliErrorFrom(configErrors)
-		const ini = require('../ini')
-		await aws.writeAwsFile(aws.AWS_CONFIG_FILE, ini.setSection(configStr, `profile ${name}`, [['region', region], [transforms.VERSION_KEY, settings.CLI_VERSION]]))
+		await writeConsoleProfile(name, region)
 		p.log.step('Signing in with aws login…')
 		await aws.awsLogin(name)
 	} else {
@@ -208,6 +243,66 @@ const add = async (args, opts) => {
 	if (await ask(p.confirm({ message:`Switch to ${name} now?` })))
 		return switchTo(findProfile(next, name), next, { ...opts, interactive })
 	p.outro(`Switch to it any time with ${ui.accent(`${shell.FUNCTION_NAME} ${name}`)}`)
+}
+
+const writeConsoleProfile = async (name, region) => {
+	const [configErrors, configStr] = await aws.getConfigFile()
+	if (configErrors)
+		throw ui.cliErrorFrom(configErrors)
+	await aws.writeAwsFile(aws.AWS_CONFIG_FILE, ini.setSection(configStr, `profile ${name}`, [['region', region], [transforms.VERSION_KEY, settings.CLI_VERSION]]))
+	return configStr
+}
+
+// Validates the flags that create one profile without prompting. Fails with exit code 3.
+const checkNewProfile = (state, opts, flags, usage) => {
+	const missing = Object.entries(flags).filter(([, value]) => !value).map(([flag]) => flag)
+	if (missing.length)
+		throw new ui.CliError(`Missing ${missing.join(', ')}.`, { code:3, hint:`Run: ${usage}` })
+	const invalid = validateProfileName([...state.profiles.map(x => x.name), 'default'])(opts.name) || portals.validateRegion(opts.region)
+	if (invalid)
+		throw new ui.CliError(invalid, { code:3 })
+}
+
+/**
+ * 'switch-profile add --sso <session> --name <name> --account <id> --role <role> --region <region>': one SSO
+ * profile, written without 'aws configure sso'. The role is only checked by AWS at the first login or switch.
+ */
+const addSsoProfile = async (state, opts) => {
+	checkNewProfile(state, opts, { '--name':opts.name, '--account':opts.account, '--role':opts.role, '--region':opts.region }, `switch-profile add --sso ${opts.sso} --name <name> --account <id> --role <role> --region <region>`)
+	if (!/^\d{12}$/.test(opts.account))
+		throw new ui.CliError('--account must be a 12-digit AWS account id.', { code:3 })
+	await portals.findPortal(state, opts.sso)
+	const [configErrors, configStr] = await aws.getConfigFile()
+	if (configErrors)
+		throw ui.cliErrorFrom(configErrors)
+	await aws.writeAwsFile(aws.AWS_CONFIG_FILE, transforms.addSsoProfile(configStr, { name:opts.name, ssoSession:opts.sso, accountId:opts.account, roleName:opts.role, region:opts.region, version:settings.CLI_VERSION }))
+	await settings.update({})
+	if (opts.json)
+		return void process.stdout.write(JSON.stringify({ profile:opts.name, session:opts.sso, account:opts.account, role:opts.role, region:opts.region }) + '\n')
+	p.log.success(`Profile ${ui.accent(opts.name)} created`)
+	p.outro(`Switch to it any time with ${ui.accent(`${shell.FUNCTION_NAME} ${opts.name}`)}`)
+}
+
+/**
+ * 'switch-profile add --console --name <name> --region <region>': one console sign-in profile. 'aws login' is
+ * what makes it a console sign-in profile, so a failed sign-in removes the section again.
+ */
+const addConsoleProfile = async (state, opts) => {
+	checkNewProfile(state, opts, { '--name':opts.name, '--region':opts.region }, 'switch-profile add --console --name <name> --region <region>')
+	if (!opts.interactive && isRemoteSession(process.env, process.platform))
+		throw new ui.CliError('Without a browser on this machine, aws login needs a code pasted into a terminal.', { code:3, hint:'Run in a terminal: switch-profile add' })
+	const previous = await writeConsoleProfile(opts.name, opts.region)
+	try {
+		await aws.awsLogin(opts.name, { toStderr:!opts.interactive })
+	} catch(err) {
+		await aws.writeAwsFile(aws.AWS_CONFIG_FILE, previous)
+		throw new ui.CliError(`Could not sign in to ${opts.name}: ${err.message}`, { cause:err })
+	}
+	await rememberLogin(opts.name)
+	if (opts.json)
+		return void process.stdout.write(JSON.stringify({ profile:opts.name, region:opts.region }) + '\n')
+	p.log.success(`Profile ${ui.accent(opts.name)} created`)
+	p.outro(`Switch to it any time with ${ui.accent(`${shell.FUNCTION_NAME} ${opts.name}`)}`)
 }
 
 const mapLimit = async (items, limit, fn) => {
@@ -234,7 +329,7 @@ const importFromSso = async (state, opts) => {
 
 	let sessionName = opts.fromSso && opts.fromSso !== true ? opts.fromSso : null
 	if (sessionName && !sessions.some(s => s.name == sessionName))
-		throw new ui.CliError(`There is no [sso-session ${sessionName}] in ~/.aws/config.`, { code:3, hint: sessions.length ? `Known sessions: ${sessions.map(s => s.name).join(', ')}` : 'Run switch-profile add in a terminal to add a portal.' })
+		throw new ui.CliError(`There is no [sso-session ${sessionName}] in ~/.aws/config.`, { code:3, hint: sessions.length ? `Known sessions: ${sessions.map(s => s.name).join(', ')}` : 'Add a portal: switch-profile portals <name> --create --start-url <url> --region <region>' })
 	if (!sessionName) {
 		if (!interactive)
 			throw new ui.CliError('Which SSO portal?', { code:3, hint:'Pass --from-sso <session>.' })
@@ -250,7 +345,7 @@ const importFromSso = async (state, opts) => {
 			const detected = await aws.detectSsoRegion(startUrl)
 			const region = await chooseRegion(`SSO region ${ui.dim(detected ? `(where IAM Identity Center lives: ${detected}, read from the portal)` : '(where IAM Identity Center lives)')}`, detected || 'us-east-1')
 			const suggested = transforms.sessionNameFromUrl(startUrl).replace(/[^a-zA-Z0-9_-]/g, '-')
-			sessionName = await ask(p.text({ message:`Short name for this portal ${ui.dim('(usually the client)')}`, initialValue:suggested, validate: v => !/^[a-zA-Z0-9_-]+$/.test(v || '') ? 'Letters, numbers, - and _ only.' : sessions.some(s => s.name == v) ? `${v} already exists.` : undefined }))
+			sessionName = await ask(p.text({ message:`Short name for this portal ${ui.dim('(usually the client)')}`, initialValue:suggested, validate: v => portals.validatePortalName(v) || (sessions.some(s => s.name == v) ? `${v} already exists.` : undefined) }))
 			configStr = transforms.addSsoSession(configStr, { name:sessionName, startUrl, region, version:settings.CLI_VERSION })
 			await aws.writeAwsFile(aws.AWS_CONFIG_FILE, configStr)
 		} else
@@ -261,7 +356,7 @@ const importFromSso = async (state, opts) => {
 	let token = await aws.readSsoToken({ ssoSession:sessionName })
 	if (!token) {
 		if (!interactive)
-			throw new ui.CliError(`Not logged in to ${sessionName}.`, { code:2, hint:`Run: aws sso login --sso-session ${sessionName}` })
+			throw new ui.CliError(`Not logged in to ${sessionName}.`, { code:2, hint:`Run: switch-profile login --sso-session ${sessionName}` })
 		for (;;) {
 			try {
 				await ssoLogin({ ssoSession:sessionName }, { label:sessionName, loginKey:sessionName, interactive })
@@ -301,29 +396,50 @@ const importFromSso = async (state, opts) => {
 		throw new ui.CliError(`Could not list the accounts of ${sessionName}.`, { hint:String(err.message).trim().split('\n').slice(-1)[0], cause:err })
 	}
 
+	const invalidRegion = opts.region && portals.validateRegion(opts.region)
+	if (invalidRegion)
+		throw new ui.CliError(invalidRegion, { code:3 })
 	const sessionRegions = state.profiles.filter(x => x.sso_session == sessionName && x.region).map(x => x.region)
 	const region = opts.region || (interactive ? await chooseRegion('Default region for these profiles', sessionRegions[0] || session.sso_region) : session.sso_region)
 	const prefix = opts.prefix || (interactive ? await ask(p.text({ message:`Name prefix ${ui.dim('(profiles become <prefix>-<account>-<role>)')}`, initialValue:sessionName, validate: v => /^[a-z0-9_-]*$/.test(v || '') ? undefined : 'Lowercase letters, numbers, - and _ only.' })) : sessionName)
 
 	const preview = transforms.populateSsoProfiles(configStr, { ssoSession:sessionName, entries, region, prefix, prune:false, version:settings.CLI_VERSION })
-	if (!preview.added.length && !preview.stale.length) {
-		if (opts.json)
-			return process.stdout.write(JSON.stringify({ added:[], existing:preview.existing, removed:[], stale:[] }) + '\n')
-		return p.outro(`${ui.ok(ui.sym.ok)} Everything is already set up ${ui.dim(`(${preview.existing.length} profiles)`)}`)
-	}
+
+	const only = opts.only !== undefined ? opts.only.split(',').map(x => x.trim()).filter(Boolean) : null
+	if (only && !only.length)
+		throw new ui.CliError('--only needs at least one profile name.', { code:3, hint:`See the names with: switch-profile add --from-sso ${sessionName} --dry-run --json` })
+	const unknown = (only || []).filter(name => !preview.added.includes(name))
+	if (unknown.length)
+		throw new ui.CliError(`Not a new profile of ${sessionName}: ${unknown.join(', ')}`, { code:3, hint:`See the names with: switch-profile add --from-sso ${sessionName} --dry-run --json` })
+	const selected = only ? preview.addedEntries.filter(e => only.includes(e.name)) : preview.addedEntries
 
 	const summary = [
 		preview.added.length ? `${ui.ok(`+${preview.added.length}`)} new: ${preview.added.slice(0, 6).join(', ')}${preview.added.length > 6 ? ', …' : ''}` : null,
 		preview.existing.length ? ui.dim(`${preview.existing.length} already set up (kept as they are)`) : null,
 		preview.stale.length ? `${ui.warn(`−${preview.stale.length}`)} no longer available: ${preview.stale.join(', ')}` : null
 	].filter(Boolean).join('\n')
+
+	if (opts.dryRun) {
+		if (opts.json)
+			return void process.stdout.write(JSON.stringify({ dryRun:true, session:sessionName, region, prefix, added:selected.map(e => e.name), addedEntries:selected, existing:preview.existing, removed:opts.prune ? preview.stale : [], stale:preview.stale }) + '\n')
+		if (summary)
+			p.log.message(summary)
+		return p.outro(ui.dim('Dry run: nothing was written.'))
+	}
+
+	if (!preview.added.length && !preview.stale.length) {
+		if (opts.json)
+			return process.stdout.write(JSON.stringify({ added:[], existing:preview.existing, removed:[], stale:[] }) + '\n')
+		return p.outro(`${ui.ok(ui.sym.ok)} Everything is already set up ${ui.dim(`(${preview.existing.length} profiles)`)}`)
+	}
+
 	if (!opts.json)
 		p.log.message(summary)
 
 	let prune = !!opts.prune
-	let include
+	let include = only ? selected.map(e => transforms.ssoEntryKey(e.accountId, e.roleName)) : undefined
 	if (interactive && !opts.yes) {
-		if (preview.added.length) {
+		if (preview.added.length && !only) {
 			const all = preview.addedEntries.map(e => transforms.ssoEntryKey(e.accountId, e.roleName))
 			const picked = await ask(p.autocompleteMultiselect({
 				message: `Add which profiles? ${ui.dim('(all selected: space to untick, type to search, enter to confirm)')}`,
@@ -384,6 +500,8 @@ const remove = async (names, opts) => {
 	const [errors] = await aws.deleteProfiles(names)
 	if (errors)
 		throw ui.cliErrorFrom(errors)
+	if (opts.json)
+		return void process.stdout.write(JSON.stringify({ removed:names }) + '\n')
 	p.outro(`${ui.ok(ui.sym.ok)} Removed ${names.join(', ')}`)
 }
 
@@ -460,6 +578,36 @@ const portalsCommand = async (name, opts) => {
 	const interactive = await begin(opts)
 	const state = await loadState()
 
+	if (opts.create) {
+		const usage = 'switch-profile portals <name> --create --start-url <url> --region <region>'
+		if (!name || !opts.startUrl || !opts.region)
+			throw new ui.CliError('A new portal needs a name, --start-url and --region.', { code:3, hint:`Run: ${usage}` })
+		const invalid = portals.validatePortalName(name) || portals.validateStartUrl(opts.startUrl) || portals.validateRegion(opts.region)
+		if (invalid)
+			throw new ui.CliError(invalid, { code:3 })
+		if ((await portals.listPortals(state)).some(x => x.name == name))
+			throw new ui.CliError(`There is already an SSO portal named ${name}.`, { code:3, hint:`Edit it with: switch-profile portals ${name} --region <region>` })
+		await portals.createPortal(name, { startUrl:opts.startUrl, region:opts.region })
+		const portal = await portals.findPortal(state, name)
+		if (opts.json)
+			return void process.stdout.write(JSON.stringify(portal) + '\n')
+		p.log.success(`Saved ${ui.accent(name)}: ${ui.join([portal.startUrl, portal.region])}`)
+		return p.outro(ui.dim(`Log in: switch-profile login --sso-session ${name}`))
+	}
+
+	// Reads the region a start URL names, without saving anything, so it can be proposed before --create or an edit.
+	if (opts.check && opts.region)
+		throw new ui.CliError('--check only reads: it cannot be combined with --region.', { code:3 })
+	if (opts.check && opts.startUrl) {
+		const invalid = portals.validateStartUrl(opts.startUrl)
+		if (invalid)
+			throw new ui.CliError(invalid, { code:3 })
+		const detectedRegion = await aws.detectSsoRegion(opts.startUrl)
+		if (opts.json)
+			return void process.stdout.write(JSON.stringify({ startUrl:opts.startUrl, detectedRegion }) + '\n')
+		return console.log(`${opts.startUrl}\tportal says ${detectedRegion || '?'}`)
+	}
+
 	if (opts.region || opts.startUrl) {
 		if (!name)
 			throw new ui.CliError('Which portal?', { code:3, hint:'Run: switch-profile portals <name> --region <region>' })
@@ -521,23 +669,84 @@ const shortcutLabel = s => {
 	return s.active ? `on ${ui.dim(`(${files})`)}` : `on ${ui.dim(`(${files}), not loaded here: run ${s.shell.reload}`)}`
 }
 
+const readSettingsState = async () => {
+	const current = await settings.read()
+	const mode = settings.getLoginMode(current)
+	return {
+		current,
+		mode,
+		here: resolveLoginMode(mode, { env:process.env, platform:process.platform }),
+		s: await shell.getStatus(settings.CLI_VERSION),
+		legacy: await migrate.findLegacySsoProfiles()
+	}
+}
+
+const settingsSummary = ({ current, mode, here, s, legacy }) => [
+	`${ui.dim('Per-terminal switching')}  ${shortcutLabel(s)}`,
+	`${ui.dim('SSO login')}               ${LOGIN_MODE_LABELS[mode]}${mode == 'auto' ? ui.dim(` (here: ${here == 'device' ? 'device code' : 'browser'})`) : ''}`,
+	`${ui.dim('Legacy SSO profiles')}     ${legacy.length ? ui.warn(`${legacy.length} without auto-refresh`) : 'none'}`,
+	ui.dim(`${shell.tilde(settings.SETTINGS_FILE)} · format v${current.formatVersion || settings.FORMAT_VERSION} · written by ${current.lastWrittenBy || settings.CLI_VERSION}`)
+].join('\n')
+
 /**
- * 'switch-profile settings'
+ * Settings without prompting: applies --login-mode, --shortcut and --upgrade-legacy-sso, then reports the state.
+ */
+const applySettings = async opts => {
+	if (opts.loginMode && !settings.LOGIN_MODES.includes(opts.loginMode))
+		throw new ui.CliError(`Unknown login mode ${opts.loginMode}.`, { code:3, hint:`Use one of: ${settings.LOGIN_MODES.join(', ')}` })
+	if (opts.shortcut && !['on', 'off'].includes(opts.shortcut))
+		throw new ui.CliError(`--shortcut must be on or off, not ${opts.shortcut}.`, { code:3 })
+	const before = await readSettingsState()
+	if (opts.shortcut == 'on' && !before.s.supported)
+		throw new ui.CliError('The sp shortcut is not available for this shell.', { code:3, hint:'Supported shells: zsh, bash, fish and PowerShell.' })
+
+	const changed = {}
+	if (opts.loginMode) {
+		await settings.update({ loginMode:opts.loginMode })
+		changed.loginMode = opts.loginMode
+	}
+	if (opts.shortcut) {
+		const { files } = opts.shortcut == 'on' ? await shell.install(settings.CLI_VERSION) : await shell.uninstall()
+		await settings.update({ perTerminalPrompted:true })
+		changed.shortcut = { state:opts.shortcut, files }
+	}
+	if (opts.upgradeLegacySso && before.legacy.length) {
+		const { sessions, backups } = await migrate.upgradeLegacySsoProfiles(before.legacy)
+		await settings.update({ ssoUpgradeDeclined:false })
+		changed.legacySso = { upgraded:before.legacy, sessions, backups }
+	}
+
+	const after = await readSettingsState()
+	if (opts.json) {
+		const { supported, installed, active, outdated, shell:sh } = after.s
+		return void process.stdout.write(JSON.stringify({
+			loginMode: after.mode,
+			loginModeHere: after.here,
+			shortcut: { supported, installed, active, outdated, shell:sh.name || null, files:sh.files || [], reload:sh.reload || null },
+			legacySso: after.legacy,
+			settingsFile: settings.SETTINGS_FILE,
+			formatVersion: after.current.formatVersion || settings.FORMAT_VERSION,
+			changed
+		}, null, 2) + '\n')
+	}
+	p.log.message(settingsSummary(after))
+	if (changed.shortcut)
+		p.log.success(opts.shortcut == 'on' ? `Added ${ui.accent(shell.FUNCTION_NAME)} to ${changed.shortcut.files.map(shell.tilde).join(', ')}\n${ui.dim(`Open a new terminal or run: ${after.s.shell.reload}`)}` : `Removed ${shell.FUNCTION_NAME} from ${changed.shortcut.files.map(shell.tilde).join(', ')} ${ui.dim('(open terminals keep it until closed)')}`)
+	if (changed.legacySso)
+		p.log.success(`Upgraded ${before.legacy.length} legacy SSO profile${before.legacy.length > 1 ? 's' : ''}. Log in once per portal. ${ui.dim(`Backups: ${changed.legacySso.backups.join(', ')}`)}`)
+	p.outro(ui.dim(Object.keys(changed).length ? 'Settings saved.' : 'Nothing changed.'))
+}
+
+/**
+ * 'switch-profile settings': a page in a terminal. With flags, with --json or without a terminal, no prompts.
  */
 const settingsCommand = async (args, opts) => {
-	await begin(opts, { needsInput:true })
+	const interactive = await begin(opts)
+	if (!interactive || opts.json || opts.loginMode || opts.shortcut || opts.upgradeLegacySso)
+		return applySettings(opts)
 	for (;;) {
-		const current = await settings.read()
-		const s = await shell.getStatus(settings.CLI_VERSION)
-		const legacy = await migrate.findLegacySsoProfiles()
-		const mode = settings.getLoginMode(current)
-		const here = resolveLoginMode(mode, { env:process.env, platform:process.platform }) == 'device' ? 'device code' : 'browser'
-		p.log.message([
-			`${ui.dim('Per-terminal switching')}  ${shortcutLabel(s)}`,
-			`${ui.dim('SSO login')}               ${LOGIN_MODE_LABELS[mode]}${mode == 'auto' ? ui.dim(` (here: ${here})`) : ''}`,
-			`${ui.dim('Legacy SSO profiles')}     ${legacy.length ? ui.warn(`${legacy.length} without auto-refresh`) : 'none'}`,
-			ui.dim(`${shell.tilde(settings.SETTINGS_FILE)} · format v${current.formatVersion || settings.FORMAT_VERSION} · written by ${current.lastWrittenBy || settings.CLI_VERSION}`)
-		].join('\n'))
+		const { current, mode, s, legacy, here } = await readSettingsState()
+		p.log.message(settingsSummary({ current, mode, here, s, legacy }))
 
 		const action = await ask(p.select({
 			message: 'Change something?',

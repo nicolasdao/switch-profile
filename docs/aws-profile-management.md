@@ -89,6 +89,7 @@ The mode comes from `--device`/`--browser`, else `settings.loginMode` (`auto` by
 
 - Interactive: spawns `aws sso login` with stdout and stderr piped. As soon as the output contains the code and pre-filled URL (device) or a URL (browser), it shows them. Device mode copies the code (`clipboard.copy`), opens the browser locally, and listens for `q` (QR code via `uqr`), `c` (copy again), `o`/Enter (open browser, local only) and Ctrl+C (kills the child, `CancelError`). A `timerSpinner` shows the wait. If nothing parseable arrives within 10 seconds, the raw output is printed.
 - Non-interactive (`plainLogin`): the AWS CLI's output is passed through on stderr; a failure exits 2.
+- A console sign-in (`aws.awsLogin`) sends the AWS CLI's output to stderr too when non-interactive. Without a browser it needs `--remote`, which waits for a code pasted on stdin, so `connect()` exits 2 instead of starting it.
 - Success stores the time in `settings.logins[loginKey]` (`sso_session`, else start URL, else profile name).
 - Failure shows the AWS CLI's error lines. A wrong SSO region (`isWrongSsoRegion`) or `invalid_grant` adds a hint about the SSO region; the first also sets `wrongRegion` on the `CliError`, so a caller that owns the `[sso-session]` can offer to fix it.
 
@@ -104,7 +105,7 @@ Used by the home screen header and `status`. Reads every `~/.aws/sso/cache/*.jso
 
 ### `login` and `logout` commands
 
-- `login` forces a new session: `ssoLogin()` for SSO profiles; for `login` and `role` profiles, `connect(…, { force:true })` logs in without trying the identity first. Then one identity check.
+- `login` forces a new session: `ssoLogin()` for SSO profiles; for `login` and `role` profiles, `connect(…, { force:true })` logs in without trying the identity first. Then one identity check. `--sso-session <name>` calls `ssoLogin({ ssoSession })` directly, so a portal with no profile can log in; it does no identity check.
 - `logout` runs `aws.logoutAll()`: `aws sso logout`, then `aws logout --all` on CLI 2.32+ (errors ignored), and clears `settings.logins`.
 
 ## Import from an SSO portal
@@ -143,6 +144,7 @@ This is not a documented AWS contract, so the result is only ever a suggestion t
 | `aws.createSsoProfile(name)` | Runs `aws configure sso --profile <name>` with the login flags of the login mode (`--use-device-code --no-browser` over SSH or without a display, as for `aws sso login`) (terminal inherited, stderr also captured with `tee` so a failure carries the AWS CLI error as `output`), then stamps the profile. If no session name was given (legacy format), upgrades it with `transforms.upgradeLegacySsoProfiles()` and returns `true` (one more login needed). |
 | Console sign-in (in `add`) | `[profile <name>]` with `region` and `switch_profile_version`, then `aws login --profile <name>`, which adds the login settings. |
 | `aws.createProfile({ name, aws_access_key_id, aws_secret_access_key, region })` | `[profile <name>]` (`region`, `output = json`, stamp) in config and `[<name>]` (keys, stamp) in credentials. |
+| `transforms.addSsoProfile(config, { name, ssoSession, accountId, roleName, region, version })` (`add --sso`) | `[profile <name>]` (`sso_session`, `sso_account_id`, `sso_role_name`, `region`, `output = json`, stamp). No `switch_profile_generated`, so it is never stale. |
 
 ## Removing profiles
 

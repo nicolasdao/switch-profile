@@ -98,6 +98,53 @@ module.exports = [
 	{
 		name: 'AWS GovCloud (US-West)', 
 		code: 'us-gov-west-1'
+	},
+	{
+		name: 'Asia Pacific (Taipei)',
+		code: 'ap-east-2'
+	},
+	{
+		name: 'Asia Pacific (Hyderabad)',
+		code: 'ap-south-2'
+	},
+	{
+		name: 'Asia Pacific (Jakarta)',
+		code: 'ap-southeast-3'
+	},
+	{
+		name: 'Asia Pacific (Melbourne)',
+		code: 'ap-southeast-4'
+	},
+	{
+		name: 'Asia Pacific (Malaysia)',
+		code: 'ap-southeast-5'
+	},
+	{
+		name: 'Asia Pacific (Thailand)',
+		code: 'ap-southeast-7'
+	},
+	{
+		name: 'Canada West (Calgary)',
+		code: 'ca-west-1'
+	},
+	{
+		name: 'Europe (Zurich)',
+		code: 'eu-central-2'
+	},
+	{
+		name: 'Europe (Spain)',
+		code: 'eu-south-2'
+	},
+	{
+		name: 'Israel (Tel Aviv)',
+		code: 'il-central-1'
+	},
+	{
+		name: 'Middle East (UAE)',
+		code: 'me-central-1'
+	},
+	{
+		name: 'Mexico (Central)',
+		code: 'mx-central-1'
 	}
 ]
-

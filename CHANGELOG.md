@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Add the `switch-aws-profile` agent skill (`npx happyskills install nicolasdao/switch-aws-profile`) that controls every feature of the CLI from plain language, through `npx`. It needs Node.js 20.12+ and the AWS CLI v2, and guides setup decisions such as the profile kind, SSO region and names
+- Add `portals <name> --create --start-url <url> --region <region>` to save a new SSO portal without prompting, and `portals --check --start-url <url>` to read the region of a portal not saved yet
+- Add `login --sso-session <portal>` to log in to a portal before it has any profile
+- Add `add --from-sso --dry-run` to preview an import, and `--only <names>` to import only some of the new profiles
+- Add `add --sso <session> --name --account --role --region` and `add --console --name --region` to create one profile without prompting
+- Add `settings --login-mode`, `--shortcut` and `--upgrade-legacy-sso`, and make `settings` report its state without a terminal or with `--json` instead of exiting 3
+- Add `accountName`, `source_profile`, `generated`, `legacySso` and `needsLogin` to each profile of `status --json`
+- Add JSON output to `remove --json` and `logout --json`, which printed text
+
+### Changed
+- `add --from-sso` without a login now hints at `switch-profile login --sso-session <session>` instead of `aws sso login`
+
+### Fixed
+- Fix a console sign-in without a terminal on a machine with no browser waiting for a code that could never be pasted: it now exits 2 at once
+- Fix the AWS CLI's output landing in the `--json` stdout of a console sign-in
+- Fix non-interactive logins not being remembered, which left `loggedInAt` empty in `status --json`
+- Fix `login` asking for another login, or logging in twice, when the login worked but the role has no access: it now says `Logged in, but X still has no access`
+- Fix `login --device` and `--browser` being ignored for a role profile, and the meaningless error for a role whose source has nothing to log in to (now exit 3)
+- Fix `remove` treating the name as a pattern: `remove my.prod` could delete `myxprod`
+- Fix the `sp` shortcut offer being shown without a terminal after a switch
+- Fix profile names of an import shifting when some are left out, so a name from the preview always means the same account and role
+- Fix `status --json` reporting `needsLogin: false` for a default role profile whose SSO source needs a login
+- Fix flags refusing AWS regions missing from the built-in list (Melbourne, Jakarta, Zurich and others): any region-shaped value is accepted, and the pickers list 12 more regions. `add --from-sso --region` now refuses values that are not shaped like a region
+- Fix `npm run test:dist`, which ran the end-to-end tests against the sources instead of the bundle
+
 ## [2.5.0] - 2026-10-13
 
 ### Added

@@ -28,13 +28,13 @@ Commands are defined in `src/cli.js` (commander). `sp` passes its arguments thro
 | *(default)* | `[profile...]` |
 | `use` | `<profile>` |
 | `status` | (uses the global `--json`) |
-| `login` | `[profile]`, `--device`, `--browser` |
+| `login` | `[profile]`, `--device`, `--browser`, `--sso-session <name>` |
 | `logout` | `-y, --yes` |
-| `add` | `--from-sso [session]`, `--region <region>`, `--prefix <prefix>`, `--prune`, `-y, --yes` |
+| `add` | `--from-sso [session]`, `--only <names>`, `--dry-run`, `--prefix <prefix>`, `--prune`, `--sso <session>`, `--console`, `--name <name>`, `--account <id>`, `--role <role>`, `--region <region>`, `-y, --yes` |
 | `rename` / `mv` | `[profile]`, `[new-name]` |
 | `remove` / `rm` | `[profiles...]`, `-y, --yes` |
-| `portals` / `portal` | `[name]`, `--region <region>`, `--start-url <url>`, `--check` |
-| `settings` | |
+| `portals` / `portal` | `[name]`, `--region <region>`, `--start-url <url>`, `--check`, `--create` |
+| `settings` | `--login-mode <mode>`, `--shortcut <on\|off>`, `--upgrade-legacy-sso` |
 | `switch` | Hidden. 1.x compatibility, same as the default command without arguments. |
 
 Global options, accepted before or after the command: `--json`, `--no-input`, `--debug`, `-v, --version`, `-h, --help`.
@@ -238,7 +238,7 @@ Without arguments, non-interactive runs exit 3: `Which profile? Pass its name.`
      │     export AWS_PROFILE=acme-prod
      ◆  Set up the sp shortcut? It switches this terminal automatically and adds tab-completion (adds a few lines to ~/.zshrc)
      ```
-     The offer appears once (`perTerminalPrompted`), only for supported shells. Later runs show a tip instead. When `sp` is installed but not used, the tip says to use it (and how to load it). On Windows the hint shows both `$env:AWS_PROFILE = "x"` (PowerShell) and `set AWS_PROFILE=x` (CMD).
+     The offer appears once (`perTerminalPrompted`), only in a terminal and for supported shells. Later runs show a tip instead. When `sp` is installed but not used, the tip says to use it (and how to load it). On Windows the hint shows both `$env:AWS_PROFILE = "x"` (PowerShell) and `set AWS_PROFILE=x` (CMD).
 
 `--json` output: `{"profile", "account", "arn", "region", "default": true, "terminal": <handed to sp>}`.
 
@@ -302,9 +302,11 @@ When a login is needed, the last line reads `Run sp login to log in again.`
   "default": { "name": "acme-prod", "kind": "sso", "account": "111111111111", "role": "Admin", "region": "ap-southeast-2", "sso_session": "acme", "prod": true, "needsLogin": false, "loggedInAt": "2026-10-01T09:00:00.000Z" },
   "terminal": "acme-dev",
   "shortcut": { "installed": true, "active": true, "shell": "zsh" },
-  "profiles": [ { "name": "acme-prod", "kind": "sso", "account": "111111111111", "role": "Admin", "region": "ap-southeast-2", "sso_session": "acme", "prod": true } ]
+  "profiles": [ { "name": "acme-prod", "kind": "sso", "account": "111111111111", "accountName": "Prod Workloads", "role": "Admin", "region": "ap-southeast-2", "sso_session": "acme", "prod": true, "legacySso": false, "generated": true, "needsLogin": false } ]
 }
 ```
+
+In `profiles`, `source_profile` is set on role profiles. `needsLogin` comes from the SSO token cache: `true` or `false` for SSO profiles and for role profiles whose source is SSO, `null` for the others, where the cache cannot tell.
 
 ## `login [profile] [--device|--browser]`
 
@@ -315,6 +317,10 @@ Starts a fresh login now, even if the session is valid.
 - Console sign-in, or a role whose source is SSO/console sign-in: forced login through the same path as a switch.
 - Keys or credential process: exit 3, `nothing to log in to`.
 - Then one identity check: `└  ✓ acme-dev · Admin · 222222222222 · ap-southeast-2`. `--json`: `{"profile", "account", "arn"}`.
+- `--sso-session <name>` logs in to a portal instead of a profile, for a portal with no profile yet (unknown portal, or a profile passed too: exit 3). No identity check. `--json`: `{"session"}`.
+- A login that works but leaves the profile without access (typically, the role is not assigned to this user): `Logged in, but X still has no access.`, exit 1, without logging in again.
+- A role profile whose source can log in follows `--device` and `--browser`; one whose source cannot: exit 3.
+- Console sign-in without a terminal, on a machine with no browser: exit 2 at once. `aws login --remote` would wait for a code pasted on stdin.
 
 `login` does not change the default profile.
 
@@ -325,11 +331,11 @@ Starts a fresh login now, even if the session is valid.
 │  No
 ```
 
-Runs `aws sso logout`, then `aws logout --all` on AWS CLI 2.32+, and clears `settings.logins`. Over SSH it adds `This machine no longer has AWS access.` Non-interactive without `--yes`: exit 3.
+Runs `aws sso logout`, then `aws logout --all` on AWS CLI 2.32+, and clears `settings.logins`. Over SSH it adds `This machine no longer has AWS access.` Non-interactive without `--yes`: exit 3. `--json`: `{"loggedOut": true}`.
 
 ## `add`
 
-Interactive menu (non-interactive without `--from-sso`: exit 3):
+Interactive menu (non-interactive without `--from-sso`, `--sso` or `--console`: exit 3):
 
 ```
 ◆  What would you like to add?
@@ -390,11 +396,21 @@ Yes updates `sso_region` of the `[sso-session]` and logs in again. No (or no reg
 - Removing stale profiles backs up the AWS files first. Only profiles generated by the import (`switch_profile_generated`) can be stale.
 - Nothing new and nothing stale: `✓ Everything is already set up (14 profiles)`.
 
-**Non-interactive** (`--from-sso <session>`): the session must exist (exit 3 otherwise, listing known sessions), a valid token must be cached (exit 2, `Run: aws sso login --sso-session acme`), the region defaults to the SSO region and the prefix to the session name, stale profiles are removed only with `--prune`. `--yes` skips the selection and confirmations in a terminal and adds every new profile (region and prefix are still asked unless passed). `--json`: `{"added", "existing", "removed", "stale"}`.
+**Non-interactive** (`--from-sso <session>`): the session must exist (exit 3 otherwise, listing known sessions), a valid token must be cached (exit 2, `Run: switch-profile login --sso-session acme`), the region defaults to the SSO region and the prefix to the session name, stale profiles are removed only with `--prune`. `--yes` skips the selection and confirmations in a terminal and adds every new profile (region and prefix are still asked unless passed). `--json`: `{"added", "existing", "removed", "stale"}`.
+
+- `--dry-run` writes nothing and reports what would change. `--json`: `{"dryRun": true, "session", "region", "prefix", "added", "addedEntries": [{"name", "accountId", "accountName", "roleName"}], "existing", "removed", "stale"}`. In a terminal, region and prefix are still asked unless passed.
+- `--only a,b` adds only these new profiles (names as shown by `--dry-run`, so with the same prefix), and skips the selection in a terminal. A name that is not a new profile, or an empty list: exit 3.
+
+### Creating one profile without prompting
+
+- `add --sso <session> --name <name> --account <id> --role <role> --region <region>` writes one SSO profile for a portal, without `aws configure sso`. All flags are required (exit 3), and so are a known portal, a free valid name, a 12-digit account and a region-shaped value. AWS only checks the account and role at the first use. `--json`: `{"profile", "session", "account", "role", "region"}`.
+- `add --console --name <name> --region <region>` writes one console sign-in profile and runs `aws login`, which is what makes it one, so a failed sign-in removes it again (exit 1). Without a terminal, on a machine with no browser: exit 3, nothing written. `--json`: `{"profile", "region"}`. Without a terminal, the AWS CLI's output goes to stderr; in a terminal it shares stdout with the JSON.
+
+Access keys have no flags: they are added from the interactive menu only, so the secret never passes through a command line.
 
 ## `remove [profiles...] [--yes]`
 
-Without names, a searchable multi-select (the current default is disabled: `current default: switch first`). Then a confirmation (default No). Non-interactive: names and `--yes` are required (exit 3 otherwise). Removing the current default, or an unknown name, exits 3. `[sso-session]` sections are kept.
+Without names, a searchable multi-select (the current default is disabled: `current default: switch first`). Then a confirmation (default No). Non-interactive: names and `--yes` are required (exit 3 otherwise). Removing the current default, or an unknown name, exits 3. `[sso-session]` sections are kept. `--json`: `{"removed": [names]}`.
 
 ## `rename [profile] [new-name]`
 
@@ -452,11 +468,13 @@ The portal page (also with a name, and from the error screen):
 Non-interactive:
 
 - `portals --json`: `{"portals": [{ "name", "startUrl", "region", "profiles": [names] }]}`; `--check` adds `detectedRegion` (one HTTPS request per portal). Without `--json`, one tab-separated line per portal.
-- `portals <name> --region <region>` and/or `--start-url <https://…>`: saves without prompting (`--json` prints the portal). Unknown portal, unknown region, a non-https URL or a missing name: exit 3.
+- `portals <name> --region <region>` and/or `--start-url <https://…>`: saves without prompting (`--json` prints the portal). Unknown portal, a value that does not look like a region, a non-https URL or a missing name: exit 3. Only the shape of a region is checked, so newer regions work before the list in `src/aws/regions.js` knows them.
+- `portals [name] --check --start-url <https://…>`: reads the region that URL's page names, and writes nothing (with `--region`: exit 3). Use it for a portal not saved yet. `--json`: `{"startUrl", "detectedRegion"}` (`null` when the page names none). As everywhere, the result is a suggestion to confirm.
+- `portals <name> --create --start-url <https://…> --region <region>`: saves a new portal (`--json` prints it). A missing flag, a name other than letters, numbers, `-` and `_`, a taken name, a value that does not look like a region or a non-https URL: exit 3.
 
 ## `settings`
 
-Interactive only. Loops until **Done**.
+In a terminal, with no flags and no `--json`: a page that loops until **Done**.
 
 ```
 │  Per-terminal switching  on (~/.zshrc)
@@ -479,6 +497,16 @@ Per-terminal switching shows `off`, `on (files)`, `on (files), not loaded here: 
 | Change how SSO logins happen | Always | `auto`, always device code, always browser |
 | Upgrade N legacy SSO profiles | Legacy profiles exist | Converts them (with backups), clears `ssoUpgradeDeclined` |
 | Done | Always | `Settings saved.` |
+
+Without a terminal, with `--json`, or with a flag, it never prompts: it applies the flags, then reports the state.
+
+| Flag | Effect |
+|------|--------|
+| `--login-mode <auto\|device\|browser>` | Sets `loginMode` (anything else: exit 3) |
+| `--shortcut <on\|off>` | Adds or removes the block (`on` in an unsupported shell: exit 3) |
+| `--upgrade-legacy-sso` | Converts every legacy SSO profile (with backups). Nothing to convert: no change |
+
+`--json`: `{"loginMode", "loginModeHere", "shortcut": {"supported", "installed", "active", "outdated", "shell", "files", "reload"}, "legacySso": [names], "settingsFile", "formatVersion", "changed"}`. `changed` holds what this run changed: `loginMode`, `shortcut` (`state`, `files`), `legacySso` (`upgraded`, `sessions`, `backups`).
 
 ## Visual conventions
 

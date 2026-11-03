@@ -17,6 +17,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 ;(async () => {
 	if (args[0] == '--version') return console.log(`aws-cli/${process.env.FAKE_AWS_VERSION || '2.33.17'} Python/3.13.12 Darwin/25.2.0 source/arm64`)
 	if (args[0] == 'sts' && args[1] == 'get-caller-identity') {
+		if (process.env.FAKE_NO_ACCESS && fs.existsSync(cacheDir)) { console.error('\nAn error occurred (ForbiddenException) when calling the GetRoleCredentials operation: No access'); process.exit(254) }
 		const name = arg('--profile'); const p = section(`profile ${name}`)
 		if (p.sso_session || p.sso_start_url) {
 			if (!fs.existsSync(tokenFile(p.sso_session || p.sso_start_url))) { console.error(`\nError loading SSO Token: Token for ${p.sso_session || p.sso_start_url} does not exist`); process.exit(255) }
@@ -41,6 +42,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 		if (process.env.FAKE_LOGIN_FAIL) { console.error('An error occurred (InvalidGrantException) when calling the CreateToken operation: invalid_grant'); process.exit(255) }
 		writeToken(session, s.sso_start_url)
 		return console.log(`Successfully logged into Start URL: ${s.sso_start_url}`)
+	}
+	if (args[0] == 'login') { // 'aws login' adds its own settings to the profile
+		if (process.env.FAKE_LOGIN_FAIL) { console.error('aws: [ERROR]: sign-in failed'); process.exit(255) }
+		console.log('Signed in.')
+		const p = path.join(home, '.aws', 'config')
+		return fs.writeFileSync(p, config().replace(`[profile ${arg('--profile')}]\n`, `[profile ${arg('--profile')}]\nlogin_session = arn:aws:iam::444444444444:user/nic\n`))
 	}
 	if (args[0] == 'sso' && args[1] == 'logout') { fs.rmSync(cacheDir, { recursive:true, force:true }); return }
 	if (args[0] == 'sso' && args[1] == 'list-accounts') return console.log(JSON.stringify({ accountList:[{ accountId:'111111111111', accountName:'Prod Workloads' }, { accountId:'222222222222', accountName:'Dev' }, { accountId:'333333333333', accountName:'Security' }] }))

@@ -11,7 +11,9 @@ const { ask, chooseRegion } = require('./common')
 const { ssoLogin } = require('./login-flow')
 
 const validateStartUrl = v => /^https:\/\/\S+$/.test(v || '') ? undefined : 'Enter the https:// start URL of the portal.'
-const validateRegion = v => aws.regions.some(r => r.code == v) ? undefined : `Unknown region ${v}.`
+// Checks the shape, not a list: a region newer than this release must still be accepted from a flag.
+const validateRegion = v => /^[a-z]{2}(-[a-z]+){1,2}-\d+$/.test(v || '') ? undefined : `${v} is not an AWS region (e.g., ap-southeast-2).`
+const validatePortalName = v => /^[a-zA-Z0-9_-]+$/.test(v || '') ? undefined : 'Letters, numbers, - and _ only.'
 
 const readConfig = async () => {
 	const [errors, configStr] = await aws.getConfigFile()
@@ -64,6 +66,14 @@ const portalHint = x => ui.join([regionNote(x), `${x.profiles.length} profile${x
 const updatePortal = async (name, { startUrl, region }) => {
 	const configStr = await readConfig()
 	await aws.writeAwsFile(aws.AWS_CONFIG_FILE, transforms.updateSsoSession(configStr, { name, startUrl, region, version:settings.CLI_VERSION }))
+}
+
+/**
+ * Saves a new portal as an [sso-session].
+ */
+const createPortal = async (name, { startUrl, region }) => {
+	const configStr = await readConfig()
+	await aws.writeAwsFile(aws.AWS_CONFIG_FILE, transforms.addSsoSession(configStr, { name, startUrl, region, version:settings.CLI_VERSION }))
 }
 
 /**
@@ -148,6 +158,8 @@ const fixSsoRegion = async (session, loginError) => {
 module.exports = {
 	validateStartUrl,
 	validateRegion,
+	validatePortalName,
+	createPortal,
 	listPortals,
 	findPortal,
 	regionMismatch,

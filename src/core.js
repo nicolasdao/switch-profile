@@ -54,11 +54,11 @@ const commandError = (message, { command, exitCode, output }) => Object.assign(n
  * @return {String}  stdout
  */
 const run = (cmd, args, options) => new Promise((next, fail) => {
-	const { inherit, tee } = options || {}
+	const { inherit, tee, stdoutToStderr } = options || {}
 	const started = Date.now()
 	const command = `${cmd} ${log.redactArgs(args).join(' ')}`.trim()
 	const child = spawn(cmd, args || [], {
-		stdio: tee ? ['inherit', 'inherit', 'pipe'] : inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+		stdio: tee ? ['inherit', stdoutToStderr ? 2 : 'inherit', 'pipe'] : inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'],
 		...(IS_WINDOWS ? { shell:true } : {})
 	})
 	let stdout = ''

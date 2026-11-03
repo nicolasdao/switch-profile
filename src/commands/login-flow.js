@@ -36,8 +36,10 @@ const ssoLogin = async (target, { label, loginKey, interactive, loginMode }) => 
 	const device = args.includes('--use-device-code') || legacyCli
 	const remote = isRemoteSession(process.env, process.platform)
 
-	if (!interactive)
-		return plainLogin(args, label)
+	if (!interactive) {
+		await plainLogin(args, label)
+		return rememberLogin(loginKey)
+	}
 
 	const started = Date.now()
 	const child = spawn('aws', args, { stdio:['ignore', 'pipe', 'pipe'], ...(IS_WINDOWS ? { shell:true } : {}) })

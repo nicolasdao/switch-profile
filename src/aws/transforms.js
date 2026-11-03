@@ -280,13 +280,14 @@ const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, p
 			existing.push(found.name)
 			continue
 		}
-		if (included && !included.has(key(e.accountId, e.roleName)))
-			continue
+		// Names are reserved before filtering, so a name means the same pair with or without 'include'.
 		const base = generatedProfileName(prefix || ssoSession, e.accountName, e.accountId, e.roleName)
 		let name = base
 		for (let i = 2; taken.has(name); i++)
 			name = `${base}-${i}`
 		taken.add(name)
+		if (included && !included.has(key(e.accountId, e.roleName)))
+			continue
 		config = ini.setSection(config, `profile ${name}`, [
 			['sso_session', ssoSession],
 			['sso_account_id', e.accountId],
@@ -389,6 +390,15 @@ const addSsoSession = (configStr, { name, startUrl, region, version }) => {
  * Changes the start URL and/or SSO region of an [sso-session] (pure). Profiles that reference the session
  * follow it. Undefined fields are left as they are.
  */
+const addSsoProfile = (configStr, { name, ssoSession, accountId, roleName, region, version }) => ini.setSection(configStr, `profile ${name}`, [
+	['sso_session', ssoSession],
+	['sso_account_id', accountId],
+	['sso_role_name', roleName],
+	['region', region],
+	['output', 'json'],
+	[VERSION_KEY, version]
+])
+
 const updateSsoSession = (configStr, { name, startUrl, region, version }) => {
 	const section = `sso-session ${name}`
 	if (!ini.getSection(configStr, section))
@@ -403,6 +413,7 @@ const updateSsoSession = (configStr, { name, startUrl, region, version }) => {
 module.exports = {
 	GENERATED_KEY,
 	updateSsoSession,
+	addSsoProfile,
 	ACCOUNT_NAME_KEY,
 	generatedProfileName,
 	populateSsoProfiles,

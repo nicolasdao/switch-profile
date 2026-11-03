@@ -32,6 +32,7 @@ Pitfalls that are not obvious, for users first, then for maintainers.
 - [Maintainer gotchas](#maintainer-gotchas)
     - [clack's spinner exits the process on Ctrl+C](#clacks-spinner-exits-the-process-on-ctrlc)
     - [clack autocomplete re-filters function options](#clack-autocomplete-re-filters-function-options)
+    - [The sources need a newer Node than the published package](#the-sources-need-a-newer-node-than-the-published-package)
 
 ## Profile switching is global by default
 
@@ -83,7 +84,7 @@ AWS_PROFILE=dev aws s3 ls
 AWS_PROFILE=dev terraform plan
 ```
 
-Prefixing also lets concurrent agents use different profiles. For agents: `switch-profile` never prompts without a TTY, `status --json` lists profiles, and exit code 2 means "a human must run `switch-profile login <profile>`". `switch-profile login <profile> --device` also works non-interactively: the URL and code go to stderr.
+Prefixing also lets concurrent agents use different profiles. For agents: `switch-profile` never prompts without a TTY, `status --json` lists profiles, and exit code 2 means a login is needed. `switch-profile login <profile> --device` works non-interactively: the URL and code go to stderr, for a human to approve. The `switch-aws-profile` agent skill (`.agents/skills/switch-aws-profile`) wraps all of this.
 
 ## Switching and search
 
@@ -165,3 +166,7 @@ The credentials refresh as long as the SSO login of `dev` is valid.
 ### clack autocomplete re-filters function options
 
 When `options` is a function, clack's `autocomplete` still filters the returned rows by substring of the typed text. The home screen ranks and filters with `fuzzysort` already, so clack's filter would drop fuzzy matches (`acme prod` does not appear as a substring of `acme-prod`). The home screen uses `@clack/core`'s `AutocompletePrompt` directly, which does not filter function options, so this only matters if a future prompt goes back to `@clack/prompts`' `autocomplete`: pass `filter: () => true` whenever options are pre-filtered.
+
+### The sources need a newer Node than the published package
+
+The published package is one CommonJS bundle and runs on Node.js 20.12+. The sources `require()` ES modules (`@clack/prompts`), which needs Node.js 22.12+, so in a checkout on an older Node, `node index.js` fails with `ERR_REQUIRE_ESM`. To test on the oldest supported Node, test the bundle: `npm run build`, then `SWITCH_PROFILE_DIST=1 npx -y -p node@20.12.0 -c 'node node_modules/mocha/bin/mocha.js --exit test/cli.js'`.

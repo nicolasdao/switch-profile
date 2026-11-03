@@ -216,13 +216,16 @@ const ssoLoginArgs = async (target, loginMode) => {
 
 /**
  * Signs in a console-credentials profile ('aws login', AWS CLI 2.32+) in this terminal.
+ *
+ * @param  {String}  profile
+ * @param  {Boolean} options.toStderr	Sends the AWS CLI's output to stderr (non-interactive runs: stdout may be --json)
  */
-const awsLogin = async profile => {
+const awsLogin = async (profile, { toStderr } = {}) => {
 	const version = await getAwsCliVersion()
 	if (!atLeast(version, [2, 32, 0]))
 		throw new Error(`'aws login' needs AWS CLI 2.32 or later (you have ${version}). Update the AWS CLI and try again.`)
 	const remote = isRemoteSession(process.env, process.platform) ? ['--remote'] : []
-	await run('aws', ['login', '--profile', profile, ...remote], { tee:true })
+	await run('aws', ['login', '--profile', profile, ...remote], { tee:true, stdoutToStderr:toStderr })
 }
 
 /**
@@ -307,9 +310,11 @@ const getDefaultProfile = () => catchErrors((async () => {
 	return { profile: transforms.getDefaultProfileName(configStr, credsStr) }
 })())
 
+const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 const deleteProfileFromConfig = (profile, fileContent) => {
 	fileContent = fileContent || ''
-	const regExp = new RegExp(`\\[(profile\\s){0,1}${profile}\\]((.|\\n|\\r)*?)(\\[|$)`)
+	const regExp = new RegExp(`\\[(profile\\s){0,1}${escapeRegExp(profile)}\\]((.|\\n|\\r)*?)(\\[|$)`)
 	const profileMatch = (fileContent.match(regExp)||[])[0] || ''
 
 	if (!profileMatch)
@@ -321,7 +326,7 @@ const deleteProfileFromConfig = (profile, fileContent) => {
 
 const deleteProfileFromCreds = (profile, fileContent) => {
 	fileContent = fileContent || ''
-	const regExp = new RegExp(`\\[${profile}\\]((.|\\n|\\r)*?)(\\[|$)`)
+	const regExp = new RegExp(`\\[${escapeRegExp(profile)}\\]((.|\\n|\\r)*?)(\\[|$)`)
 	const profileMatch = (fileContent.match(regExp)||[])[0] || ''
 
 	if (!profileMatch)

@@ -88,9 +88,9 @@ It also sets `AWS_CLI_AGENT_TOOLKIT_HINT_DISABLED=true`, so `aws configure sso` 
 | `common.js` | `preflight()` (AWS CLI v2 check, `runMigrations`, legacy SSO offer when interactive, rewrite of an outdated `sp` block), `loadState()` (profiles, default profile, settings), `ask()` (clack cancel to `CancelError`), `describe()` (role · account · region), `loginState()` (SSO status text and `needsLogin`), `loginKey()` (key of `settings.logins`). |
 | `switch.js` | `switchCommand` (default command), `homeLoop()` (home screen, then a page per action and back; Esc in a page goes back, a switch ends the session; its decisions are the pure `routeChoice()` and `afterPage()`), `withRecovery()` (runs a page or a switch, and opens the error screen on an expected failure), the status header and env warnings, `pick()` (the home screen fed by `rank.rankProfiles`), `connect()` (identity check, login, retry), `switchTo()` (write default, record usage, hand to `sp`, warnings, output), `offerShortcut()`, `enableShortcut()`. |
 | `login-flow.js` | `ssoLogin()` (interactive login screen, or `plainLogin()` passthrough when non-interactive) and `rememberLogin()`. A failed login's `CliError` carries `target` and `wrongRegion`. |
-| `portals.js` | `listPortals()` (sessions, their profiles, optionally the region read from each portal page), `updatePortal()`, `editPortal()` (the portal page), `fixSsoRegion()` (used by the import), validators. |
+| `portals.js` | `listPortals()` (sessions, their profiles, optionally the region read from each portal page), `createPortal()`, `updatePortal()`, `editPortal()` (the portal page), `fixSsoRegion()` (used by the import), validators. |
 | `recovery.js` | `recover()` (the error screen), and the pure `portalOfError()` and `recoveryOptions()`. |
-| `index.js` | `use`, `status`, `login`, `logout`, `add` and `importFromSso`, `remove`, `rename`, `portals`, `settings`. Exports the command map used by `src/cli.js` and by the home screen's actions. |
+| `index.js` | `use`, `status`, `login`, `logout`, `add` (`importFromSso`, `addSsoProfile`, `addConsoleProfile`), `remove`, `rename`, `portals`, `settings` (`applySettings` when no prompt is possible). Exports the command map used by `src/cli.js` and by the home screen's actions. |
 
 ### `src/ui.js`
 
@@ -122,12 +122,12 @@ Tool state and the storage format history; migrations keyed off `formatVersion`.
 ### `src/aws/`
 
 - `index.js`: reads the AWS files, writes them atomically, backs them up, runs the AWS CLI (`sts get-caller-identity`, `sso login` args, `login`, `sso logout`, `sso list-accounts`, `sso list-account-roles`, `configure sso`), reads the SSO token cache, reads a portal's SSO region from its start page (`detectSsoRegion`, the only request not made by the AWS CLI), caches `aws --version` in the settings file.
-- `transforms.js`: pure. `[default]` rules, 1.x detection, legacy SSO upgrade, profile listing with kinds, SSO import (`populateSsoProfiles`), `renameProfile`.
+- `transforms.js`: pure. `[default]` rules, 1.x detection, legacy SSO upgrade, profile listing with kinds, SSO import (`populateSsoProfiles`), `addSsoProfile`, `renameProfile`.
 - `login.js`: pure. `isRemoteSession`, `resolveLoginMode`, `loginFlags`, `parseLoginOutput`, `configureSsoFailure` (message and hint for a failed `aws configure sso`), `isWrongSsoRegion`, `portalRegionFromHeaders`, `atLeast`.
 
 ### `src/ini.js`, `src/core.js`
 
-`ini.js`: line-based INI edits that keep untouched lines byte for byte. `core.js`: `run()` (spawn, no shell except on Windows, fails on exit code only; `inherit` for interactive AWS CLI commands, `tee` to also capture stderr while showing it; every run logged; a failure carries `command`, `code` and the full `output`, and its message is the telling lines picked by `lastErrorLine()`), `exec()`, `isCommandExist()`, and the `catchErrors`/`wrapErrors` tuple helpers used by `src/aws/index.js`.
+`ini.js`: line-based INI edits that keep untouched lines byte for byte. `core.js`: `run()` (spawn, no shell except on Windows, fails on exit code only; `inherit` for interactive AWS CLI commands, `tee` to also capture stderr while showing it, `stdoutToStderr` to keep the AWS CLI's output off a `--json` stdout; every run logged; a failure carries `command`, `code` and the full `output`, and its message is the telling lines picked by `lastErrorLine()`), `exec()`, `isCommandExist()`, and the `catchErrors`/`wrapErrors` tuple helpers used by `src/aws/index.js`.
 
 ### `src/log.js`
 

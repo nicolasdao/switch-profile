@@ -33,7 +33,7 @@ region = us-west-2
 	let home
 	const run = (args, env) => {
 		const r = spawnSync(process.execPath, [join(ROOT, 'index.js'), ...args], {
-			env: { PATH:`${BIN}:${process.env.PATH}`, HOME:home, FAKE_LOGIN_DELAY:'100', ...env },
+			env: { PATH:`${BIN}:${process.env.PATH}`, HOME:home, FAKE_LOGIN_DELAY:'100', ...(process.env.SWITCH_PROFILE_DIST ? { SWITCH_PROFILE_DIST:'1' } : {}), ...env },
 			encoding: 'utf8'
 		})
 		return { code:r.status, out:r.stdout, err:r.stderr }
@@ -153,8 +153,222 @@ region = us-west-2
 
 	it('Should log out', () => {
 		assert.equal(run(['logout']).code, 3)
-		assert.equal(run(['logout', '--yes']).code, 0)
+		assert.deepEqual(JSON.parse(run(['logout', '--yes', '--json']).out), { loggedOut:true })
 		assert.equal(run(['acme-dev']).code, 2)
+	})
+
+	describe('setting up without a terminal', () => {
+		const SSO_URL = 'https://globex.awsapps.com/start'
+		it('Should save a new portal, refusing bad input and duplicates', () => {
+			assert.equal(run(['portals', 'globex', '--create', '--start-url', SSO_URL]).code, 3, 'the region is required')
+			assert.equal(run(['portals', 'bad name', '--create', '--start-url', SSO_URL, '--region', 'us-east-1']).code, 3)
+			assert.equal(run(['portals', 'globex', '--create', '--start-url', 'http://insecure', '--region', 'us-east-1']).code, 3)
+			assert.equal(run(['portals', 'globex', '--create', '--start-url', SSO_URL, '--region', 'mars-1']).code, 3)
+			const r = run(['portals', 'globex', '--create', '--start-url', SSO_URL, '--region', 'us-east-1', '--json'])
+			assert.equal(r.code, 0, r.err)
+			assert.deepEqual(JSON.parse(r.out), { name:'globex', startUrl:SSO_URL, region:'us-east-1', profiles:[] })
+			assert.include(config(), 'sso_registration_scopes = sso:account:access')
+			assert.equal(run(['portals', 'globex', '--create', '--start-url', SSO_URL, '--region', 'us-east-1']).code, 3, 'already exists')
+		})
+
+		it('Should read the region of a portal that is not saved yet, or return null', () => {
+			const r = run(['portals', '--check', '--start-url', 'https://127.0.0.1:9/start', '--json'])
+			assert.equal(r.code, 0, r.err)
+			assert.deepEqual(JSON.parse(r.out), { startUrl:'https://127.0.0.1:9/start', detectedRegion:null })
+			assert.equal(run(['portals', '--check', '--start-url', 'http://insecure', '--json']).code, 3)
+		})
+
+		it('Should need a login for the import, then log in to the portal itself', () => {
+			const before = run(['add', '--from-sso', 'globex', '--json'])
+			assert.equal(before.code, 2)
+			assert.include(JSON.parse(before.err).hint, 'login --sso-session globex')
+			assert.equal(run(['login', '--sso-session', 'nope', '--json']).code, 3)
+			assert.equal(run(['login', 'acme-dev', '--sso-session', 'globex']).code, 3)
+			const r = run(['login', '--sso-session', 'globex', '--device', '--json'])
+			assert.equal(r.code, 0, r.err)
+			assert.include(r.err, 'WXYZ-ABCD')
+			assert.deepEqual(JSON.parse(r.out), { session:'globex' })
+			const s = JSON.parse(fs.readFileSync(join(home, '.switch-profile', 'settings.json'), 'utf8'))
+			assert.isString(s.logins.globex, 'a non-interactive login is remembered')
+		})
+
+		it('Should preview an import without writing anything', () => {
+			const before = config()
+			const r = run(['add', '--from-sso', 'globex', '--prefix', 'gx', '--region', 'eu-west-1', '--dry-run', '--json'])
+			assert.equal(r.code, 0, r.err)
+			const out = JSON.parse(r.out)
+			assert.isTrue(out.dryRun)
+			assert.deepEqual(out.added, ['gx-prod-workloads-admin', 'gx-prod-workloads-readonly', 'gx-dev-admin', 'gx-dev-readonly', 'gx-security-readonly'])
+			assert.deepInclude(out.addedEntries, { name:'gx-security-readonly', accountId:'333333333333', accountName:'Security', roleName:'ReadOnly' })
+			assert.equal(config(), before)
+		})
+
+		it('Should import only the chosen profiles', () => {
+			const args = ['add', '--from-sso', 'globex', '--prefix', 'gx', '--region', 'eu-west-1', '--json']
+			assert.equal(run([...args, '--only', 'gx-nope']).code, 3)
+			const r = run([...args, '--only', 'gx-dev-admin,gx-prod-workloads-readonly'])
+			assert.equal(r.code, 0, r.err)
+			assert.deepEqual(JSON.parse(r.out).added, ['gx-prod-workloads-readonly', 'gx-dev-admin'])
+			assert.notInclude(config(), 'gx-security-readonly')
+		})
+
+		it('Should create one SSO profile from flags', () => {
+			const base = ['add', '--sso', 'globex', '--name', 'gx-one', '--account', '555555555555', '--role', 'Admin', '--region', 'us-west-2']
+			assert.equal(run(['add', '--sso', 'globex', '--name', 'gx-one']).code, 3, '--account, --role and --region are required')
+			assert.equal(run(['add', '--sso', 'nope', ...base.slice(3)]).code, 3, 'unknown portal')
+			assert.equal(run(['add', '--sso', 'globex', '--name', 'gx-one', '--account', '12', '--role', 'Admin', '--region', 'us-west-2']).code, 3)
+			assert.equal(run(['add', '--sso', 'globex', '--name', 'Bad Name', '--account', '555555555555', '--role', 'Admin', '--region', 'us-west-2']).code, 3)
+			assert.equal(run(['add', '--sso', 'globex', '--name', 'default', '--account', '555555555555', '--role', 'Admin', '--region', 'us-west-2']).code, 3)
+			assert.equal(run(['add', '--sso', 'globex', '--console']).code, 3, 'one kind at a time')
+			const r = run([...base, '--json'])
+			assert.equal(r.code, 0, r.err)
+			assert.deepEqual(JSON.parse(r.out), { profile:'gx-one', session:'globex', account:'555555555555', role:'Admin', region:'us-west-2' })
+			assert.equal(run(base).code, 3, 'name taken')
+			const p = JSON.parse(run(['status', '--json']).out).profiles.find(x => x.name == 'gx-one')
+			assert.deepInclude(p, { kind:'sso', account:'555555555555', role:'Admin', sso_session:'globex', generated:false, legacySso:false, needsLogin:false })
+			assert.equal(JSON.parse(run(['use', 'gx-one', '--json']).out).account, '555555555555')
+			assert.equal(run(['use', 'keys']).code, 0)
+		})
+
+		it('Should still refuse the interactive add menu, with a hint', () => {
+			const r = run(['add'])
+			assert.equal(r.code, 3)
+			assert.include(r.err, '--from-sso')
+		})
+
+		it('Should create a console sign-in profile, and leave nothing behind when the sign-in fails', () => {
+			const args = ['add', '--console', '--name', 'cs-one', '--region', 'us-west-2', '--json']
+			assert.equal(run(['add', '--console', '--name', 'cs-one']).code, 3, '--region is required')
+			const remote = run(args, { SSH_CONNECTION:'x' })
+			assert.equal(remote.code, 3)
+			assert.notInclude(config(), 'cs-one', 'over SSH it needs a terminal')
+			const failed = run(args, { DISPLAY:':0', FAKE_LOGIN_FAIL:'1' })
+			assert.equal(failed.code, 1)
+			assert.notInclude(config(), 'cs-one')
+			const r = run(args, { DISPLAY:':0' })
+			assert.equal(r.code, 0, r.err)
+			assert.deepEqual(JSON.parse(r.out), { profile:'cs-one', region:'us-west-2' }, 'stdout stays JSON')
+			const p = JSON.parse(run(['status', '--json']).out).profiles.find(x => x.name == 'cs-one')
+			assert.deepInclude(p, { kind:'login', needsLogin:null })
+		})
+
+		it('Should not wait for a pasted code when a console sign-in needs a terminal', () => {
+			const r = run(['login', 'cs-one', '--json'], { SSH_CONNECTION:'x' })
+			assert.equal(r.code, 2)
+			assert.include(JSON.parse(r.err).hint, 'login cs-one')
+		})
+
+		it('Should report JSON when removing profiles', () => {
+			const r = run(['remove', 'cs-one', 'gx-one', '--yes', '--json'])
+			assert.equal(r.code, 0, r.err)
+			assert.deepEqual(JSON.parse(r.out), { removed:['cs-one', 'gx-one'] })
+		})
+	})
+
+	describe('edge cases without a terminal', () => {
+		const args = ['add', '--from-sso', 'globex', '--prefix', 'gx', '--json']
+
+		it('Should accept any region that looks like one, and refuse the rest', () => {
+			assert.equal(run(['portals', 'melb', '--create', '--start-url', 'https://melb.awsapps.com/start', '--region', 'ap-southeast-4']).code, 0)
+			assert.equal(run(['portals', 'gov', '--create', '--start-url', 'https://gov.awsapps.com/start', '--region', 'us-gov-west-1']).code, 0)
+			assert.equal(run([...args, '--region', 'not-a-region', '--dry-run']).code, 3)
+		})
+
+		it('Should refuse an empty --only instead of adding everything', () => {
+			const before = config()
+			assert.equal(run([...args, '--region', 'eu-west-1', '--only', '']).code, 3)
+			assert.equal(run([...args, '--region', 'eu-west-1', '--only', ',']).code, 3)
+			assert.equal(config(), before)
+		})
+
+		it('Should never write with --check', () => {
+			const before = config()
+			const r = run(['portals', 'globex', '--check', '--start-url', 'https://127.0.0.1:9/other', '--json'])
+			assert.equal(r.code, 0, r.err)
+			assert.deepEqual(JSON.parse(r.out), { startUrl:'https://127.0.0.1:9/other', detectedRegion:null })
+			assert.equal(run(['portals', 'globex', '--check', '--region', 'eu-west-1']).code, 3)
+			assert.equal(config(), before)
+		})
+
+		it('Should keep the access keys of a name when a console sign-in fails', () => {
+			const creds = join(home, '.aws', 'credentials')
+			fs.appendFileSync(creds, '\n[only-creds]\naws_access_key_id = AKIA2\naws_secret_access_key = s2\n')
+			assert.equal(run(['add', '--console', '--name', 'only-creds', '--region', 'us-east-1'], { DISPLAY:':0', FAKE_LOGIN_FAIL:'1' }).code, 1)
+			assert.include(fs.readFileSync(creds, 'utf8'), 'AKIA2')
+			assert.notInclude(config(), 'only-creds')
+		})
+
+		it('Should remove exactly the named profile, whatever characters its name has', () => {
+			fs.appendFileSync(join(home, '.aws', 'config'), '\n[profile myxprod]\nregion = us-east-1\n\n[profile my.prod]\nregion = us-east-1\n')
+			assert.equal(run(['remove', 'my.prod', '--yes']).code, 0)
+			assert.include(config(), '[profile myxprod]')
+			assert.notInclude(config(), '[profile my.prod]')
+			assert.equal(run(['remove', 'myxprod', '--yes']).code, 0)
+		})
+
+		it('Should say so when a login worked but the role has no access, instead of asking for a login again', () => {
+			const r = run(['login', 'gx-dev-admin', '--device', '--json'], { FAKE_NO_ACCESS:'1' })
+			assert.equal(r.code, 1, r.err)
+			assert.include(JSON.parse(r.err.trim().split('\n').pop()).error, 'still has no access', 'the last line of stderr, after the login output')
+		})
+
+		it('Should honor --device for a role profile, and refuse a role with nothing to log in to', () => {
+			fs.appendFileSync(join(home, '.aws', 'config'), '\n[profile role-sso]\nrole_arn = arn:aws:iam::777777777777:role/R\nsource_profile = gx-dev-admin\n\n[profile role-keys]\nrole_arn = arn:aws:iam::777777777777:role/R\nsource_profile = keys\n')
+			const r = run(['login', 'role-sso', '--device', '--json'], { DISPLAY:':0' })
+			assert.equal(r.code, 0, r.err)
+			assert.include(r.err, 'WXYZ-ABCD')
+			assert.equal(run(['login', 'role-keys', '--json']).code, 3)
+			assert.equal(JSON.parse(run(['status', '--json']).out).profiles.find(x => x.name == 'role-sso').needsLogin, false)
+			assert.equal(run(['remove', 'role-sso', 'role-keys', '--yes']).code, 0)
+		})
+
+		it('Should not offer the sp shortcut without a terminal', () => {
+			const before = fs.readFileSync(join(home, '.switch-profile', 'settings.json'), 'utf8')
+			assert.notInclude(before, 'perTerminalPrompted')
+			const r = run(['use', 'keys', '--no-input'], { SHELL:'/bin/bash' })
+			assert.equal(r.code, 0, r.err)
+			assert.notInclude(r.out, 'Set up the sp shortcut')
+			assert.notInclude(fs.readFileSync(join(home, '.switch-profile', 'settings.json'), 'utf8'), 'perTerminalPrompted')
+		})
+	})
+
+	describe('settings without a terminal', () => {
+		const state = args => JSON.parse(run(['settings', ...args, '--json'], { SHELL:'/bin/bash' }).out)
+
+		it('Should report the settings', () => {
+			const s = state([])
+			assert.include(s, { loginMode:'auto', loginModeHere:'device', formatVersion:2 })
+			assert.deepInclude(s.shortcut, { supported:true, installed:false, shell:'bash' })
+			assert.deepEqual(s.changed, {})
+			assert.equal(run(['settings']).code, 0)
+		})
+
+		it('Should change the login mode', () => {
+			assert.equal(run(['settings', '--login-mode', 'nope']).code, 3)
+			assert.deepInclude(state(['--login-mode', 'browser']), { loginMode:'browser', loginModeHere:'browser' })
+			assert.equal(state(['--login-mode', 'auto']).loginMode, 'auto')
+		})
+
+		it('Should turn the sp shortcut on and off', () => {
+			assert.equal(run(['settings', '--shortcut', 'maybe']).code, 3)
+			assert.equal(run(['settings', '--shortcut', 'on'], { SHELL:'/bin/nope' }).code, 3, 'unsupported shell')
+			const rc = join(home, process.platform == 'darwin' ? '.bash_profile' : '.bashrc')
+			assert.isTrue(state(['--shortcut', 'on']).shortcut.installed)
+			assert.include(fs.readFileSync(rc, 'utf8'), '# >>> switch-profile')
+			assert.isFalse(state(['--shortcut', 'off']).shortcut.installed)
+			assert.notInclude(fs.readFileSync(rc, 'utf8'), '# >>> switch-profile')
+		})
+
+		it('Should upgrade legacy SSO profiles, with backups', () => {
+			fs.appendFileSync(join(home, '.aws', 'config'), '\n[profile old-sso]\nsso_start_url = https://initech.awsapps.com/start\nsso_region = us-east-1\nsso_account_id = 666666666666\nsso_role_name = Admin\n')
+			assert.deepEqual(state([]).legacySso, ['old-sso'])
+			const s = state(['--upgrade-legacy-sso'])
+			assert.deepEqual(s.legacySso, [])
+			assert.deepEqual(s.changed.legacySso.upgraded, ['old-sso'])
+			assert.isAbove(s.changed.legacySso.backups.length, 0)
+			assert.include(config(), '[sso-session initech]')
+			assert.equal(run(['remove', 'old-sso', '--yes']).code, 0)
+		})
 	})
 
 	it('Should log every run, AWS CLI call and error to ~/.switch-profile/switch-profile.log', () => {

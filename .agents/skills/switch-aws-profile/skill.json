@@ -1,0 +1,34 @@
+{
+	"name": "switch-aws-profile",
+	"version": "0.1.0",
+	"description": "Switch AWS profile in plain language with the switch-profile CLI: list and switch AWS accounts, AWS SSO logins, import IAM Identity Center portals, create, rename and remove profiles.",
+	"type": "skill",
+	"authors": [
+		"Nicolas Dao <nicolas.dao@gmail.com>"
+	],
+	"license": "BSD-3-Clause",
+	"repository": "https://github.com/nicolasdao/switch-profile",
+	"dependencies": {},
+	"systemDependencies": {
+		"node": {
+			"description": "Node.js with npx, which fetches and runs switch-profile. The CLI refuses to start below 20.12.0",
+			"version": ">=20.12.0",
+			"check": "node --version && npx --version",
+			"install": {
+				"darwin": "brew install node",
+				"linux": "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs",
+				"win32": "winget install --id OpenJS.NodeJS.LTS -e --source winget"
+			}
+		},
+		"aws": {
+			"description": "AWS CLI v2, which does every login and identity check. 2.22+ for device codes, 2.32+ for console sign-in",
+			"version": ">=2.22.0",
+			"check": "aws --version",
+			"install": {
+				"darwin": "brew install awscli",
+				"linux": "See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for install instructions",
+				"win32": "See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for install instructions"
+			}
+		}
+	}
+}
