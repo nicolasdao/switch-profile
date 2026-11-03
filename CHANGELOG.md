@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-03
+
 ### Added
 - Add the `switch-aws-profile` agent skill (`npx happyskills install nicolasdao/switch-aws-profile`) that controls every feature of the CLI from plain language, through `npx`. It needs Node.js 20.12+ and the AWS CLI v2, and guides setup decisions such as the profile kind, SSO region and names
 - Add `portals <name> --create --start-url <url> --region <region>` to save a new SSO portal without prompting, and `portals --check --start-url <url>` to read the region of a portal not saved yet
@@ -18,9 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Add JSON output to `remove --json` and `logout --json`, which printed text
 
 ### Changed
+- `--json` now means no prompts, even in a terminal: a command that needs an answer exits 3 with a hint instead of asking, and logins print to stderr
+- `remove` refuses a profile that a remaining role profile uses as its `source_profile` (exit 3). Remove both, or change the role first
 - `add --from-sso` without a login now hints at `switch-profile login --sso-session <session>` instead of `aws sso login`
 
 ### Fixed
+- Fix prompts, spinners and the AWS CLI's output landing in the `--json` stdout of a command run in a terminal, such as `login --json` and `add --console --json`
+- Fix `add --prune` removing the current default or the `source_profile` of a role profile: they stay, and are listed in `kept` with the reason
+- Fix non-interactive device logins missing the warning to approve only the exact code shown
 - Fix a console sign-in without a terminal on a machine with no browser waiting for a code that could never be pasted: it now exits 2 at once
 - Fix the AWS CLI's output landing in the `--json` stdout of a console sign-in
 - Fix non-interactive logins not being remembered, which left `loggedInAt` empty in `status --json`
