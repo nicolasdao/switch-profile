@@ -11,7 +11,7 @@ npx switch-profile
 ```
 
 ```
-┌   switch-profile  2.1.0
+┌   switch-profile  2.6.0
 │
 │  ● acme-prod · Admin · 111111111111 · ap-southeast-2 · PROD · SSO ✓ auto-refresh · logged in 3h ago
 │
@@ -120,11 +120,11 @@ Running `sp` (or `npx switch-profile`) with no arguments opens the home screen:
 | `add --sso <session> --name <name> --account <id> --role <role> --region <region>` | Creates one SSO profile without prompting. |
 | `add --console --name <name> --region <region>` | Creates one console sign-in profile with `aws login`, without prompting. |
 | `rename [profile] [new-name]` | Renames a profile (alias `mv`), for example an imported `acme-prod-workloads-administratoraccess` to `acme-prod`. Also updates `source_profile` references, the default profile and the home screen order. SSO logins are kept. Scripts, terminals and tools that use the old name need the new one. |
-| `remove [profiles...] [--yes]` | Removes profiles (alias `rm`). The current default cannot be removed. |
+| `remove [profiles...] [--yes]` | Removes profiles (alias `rm`). The current default cannot be removed, nor can the `source_profile` of a role profile you are keeping. |
 | `portals [name]` | Lists your SSO portals (`[sso-session]`) and edits one in place: start URL and SSO region (alias `portal`). Flags a portal whose region differs from the one its portal page names, and fixes it in one step. `--region` / `--start-url` edit without prompting; `--create` saves a new portal; `--json` lists them (`--check` adds the region read from each portal, or from `--start-url` for a portal not saved yet). |
 | `settings` | Per-terminal switching, SSO login mode, legacy SSO upgrade. Flags change them without prompting: `--shortcut <on\|off>`, `--login-mode <auto\|device\|browser>`, `--upgrade-legacy-sso`. |
 
-Global options: `--json`, `--no-input` (never prompt), `--debug` (show stack traces), `-v, --version`. Every run, AWS CLI call and error is logged to `~/.switch-profile/switch-profile.log` (secrets redacted). In examples, `sp` and `switch-profile` are interchangeable; only `sp` changes the current terminal.
+Global options: `--json` (only JSON on stdout, and never prompts), `--no-input` (never prompt), `--debug` (show stack traces), `-v, --version`. Every run, AWS CLI call and error is logged to `~/.switch-profile/switch-profile.log` (secrets redacted). In examples, `sp` and `switch-profile` are interchangeable; only `sp` changes the current terminal.
 
 See [CLI Interface](docs/cli-interface.md) for every screen.
 
@@ -164,7 +164,7 @@ sp add          # then choose "Accounts from an SSO portal"
 3. `switch-profile` lists every account and role you can access, then asks for a default region and a name prefix. Profiles are named `<prefix>-<account-name>-<role>`, for example `acme-prod-workloads-admin`. Rename any of them later with `sp rename` (re-imports still recognize them).
 4. A preview shows the new profiles, the ones already set up, and the ones that no longer exist. Then pick the new profiles to add: all are selected, so press Enter to add everything, or untick the ones you don't want (type to search by name, account or role).
 
-Run it again later to pick up new accounts. Account/role pairs that already have a profile are never duplicated, whatever its name. Generated profiles that no longer exist can be pruned (after a backup); profiles you wrote by hand are never pruned.
+Run it again later to pick up new accounts. Account/role pairs that already have a profile are never duplicated, whatever its name. Generated profiles that no longer exist can be pruned (after a backup), unless one is the current default or the `source_profile` of a role profile; profiles you wrote by hand are never pruned.
 
 Non-interactive, from nothing to profiles:
 
@@ -178,7 +178,7 @@ switch-profile add --from-sso acme --region eu-west-1 --prefix acme --json      
 
 ## Scripts and AI agents
 
-`switch-profile` never prompts when stdin or stdout is not a terminal, when `CI` is set, or with `--no-input`. It fails with a hint and an exit code instead.
+`switch-profile` never prompts when stdin or stdout is not a terminal, when `CI` is set, or with `--json` or `--no-input`. It fails with a hint and an exit code instead.
 
 | Exit code | Meaning |
 |-----------|---------|

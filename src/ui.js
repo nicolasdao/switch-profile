@@ -60,7 +60,8 @@ const ui = {
  * True when the user can answer prompts.
  */
 const isInteractive = options => {
-	if (options && options.input === false)
+	// --json promises clean stdout, and prompts and spinners write there.
+	if (options && (options.input === false || options.json))
 		return false
 	if (env.CI && env.CI !== 'false')
 		return false

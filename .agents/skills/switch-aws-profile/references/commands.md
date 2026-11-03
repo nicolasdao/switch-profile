@@ -22,7 +22,7 @@ Accepted before or after the command.
 
 | Option | Effect |
 |---|---|
-| `--json` | Result as JSON on stdout. Expected errors as `{"error","hint","code"}` on stderr |
+| `--json` | Result as JSON on stdout, and never prompts. Expected errors as `{"error","hint","code"}` on stderr |
 | `--no-input` | Never prompt: fail with a hint instead. Also the case with no terminal or when `CI` is set |
 | `--debug` | Print stack traces |
 | `-v`, `--version` | Print the version |
@@ -94,10 +94,10 @@ Keys and process profiles, and role profiles whose source is neither: exit 3 (no
 | `--prefix <p>` | Name prefix, default the session name. Names are `<prefix>-<account>-<role>`, a clash adds `-2` |
 | `--dry-run` | Writes nothing, reports what would change |
 | `--only <a,b>` | Adds only these new profiles (names from `--dry-run`, same prefix). An unknown name or an empty list: exit 3 |
-| `--prune` | Removes `stale` generated profiles, after backing up the AWS files. It does not protect the default: if the default is stale, switch first, or `status` loses track of it while `[default]` stays in effect |
+| `--prune` | Removes `stale` generated profiles, after backing up the AWS files. Any that is the current default or a role's `source_profile` stays, listed in `kept` with the reason: tell the user |
 | `-y`, `--yes` | Skips confirmation in a terminal. No effect without one, which never asks |
 
-Result: `{"added":[names],"existing":[names],"removed":[names],"stale":[names]}`.
+Result: `{"added":[names],"existing":[names],"removed":[names],"stale":[names],"kept":[{"name","reason"}]}`.
 Dry run adds: `{"dryRun":true,"session","region","prefix","addedEntries":[{"name","accountId","accountName","roleName"}]}`. Its `added` is what would be added.
 
 Exit 3: unknown session (`hint` lists them). Exit 2: no valid token, log in with `login --sso-session <session>`.
@@ -133,7 +133,7 @@ Start URLs must be `https://`. Regions must look like one (`ap-southeast-2`, `us
 | `remove <names...> --yes` (alias `rm`) | Removes profiles from both AWS files. Portals stay | `{"removed":[names]}` |
 
 - `rename`: both names required without a terminal. The new name must be valid and free (exit 3). It cannot reach other terminals, scripts, CI, kubeconfigs or Terraform settings using the old name: tell the user. `processes` lists `credential_process` lines still using `--profile <old>`, which need a manual fix.
-- `remove`: unknown names and the current default exit 3 (switch first, then remove). Without `--yes`: exit 3. A role profile whose `source_profile` is removed stops working: check `status` first.
+- `remove`: unknown names and the current default exit 3 (switch first, then remove). Without `--yes`: exit 3. The `source_profile` of a role profile that stays: exit 3 (remove both, or ask the user to change the role first).
 
 ## settings
 

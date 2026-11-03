@@ -137,7 +137,7 @@ const connect = async (profile, state, { interactive, quiet, force, loggedIn, lo
 
 	// 'aws login --remote' waits for a code pasted on stdin, which would hang (or fail) without a terminal.
 	if (loginProfile.kind == 'login' && !interactive && isRemoteSession(process.env, process.platform))
-		throw new ui.CliError(`${loginProfile.name} needs a console sign-in, and without a browser on this machine it needs a code pasted into a terminal.`, { code:2, hint:`Run in a terminal: switch-profile login ${loginProfile.name}` })
+		throw new ui.CliError(`${loginProfile.name} needs a console sign-in, and without a browser on this machine it needs a code pasted into a terminal.`, { code:2, hint:`Run in a terminal, without --json: switch-profile login ${loginProfile.name}` })
 
 	if (loginProfile.kind == 'sso')
 		await ssoLogin({ profile:loginProfile.name }, { label:loginProfile.sso_session || loginProfile.name, loginKey:loginKey(loginProfile), interactive, loginMode })
@@ -352,7 +352,7 @@ const switchCommand = async (query, opts) => {
 	if (query) {
 		const { profile, candidates } = rank.resolveQuery(state.profiles, query, { usage:state.settings.usage, current:state.defaultName })
 		if (profile) {
-			if (!interactive || opts.json)
+			if (!interactive)
 				return switchTo(profile, state, { ...opts, interactive })
 			p.intro(`${ui.badge('switch-profile')} ${ui.dim(settings.CLI_VERSION)}`)
 			// A failed switch opens the error screen; going back from it opens the home screen.

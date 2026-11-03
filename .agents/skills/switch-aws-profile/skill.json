@@ -1,6 +1,6 @@
 {
 	"name": "switch-aws-profile",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Switch AWS profile in plain language with the switch-profile CLI: list and switch AWS accounts, AWS SSO logins, import IAM Identity Center portals, create, rename and remove profiles.",
 	"type": "skill",
 	"authors": [

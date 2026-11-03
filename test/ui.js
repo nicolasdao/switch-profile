@@ -31,6 +31,22 @@ describe('ui', () => {
 		}
 	})
 
+	it('Should not be interactive with --json, even in a terminal', () => {
+		const { CI } = process.env
+		const [stdin, stdout] = [process.stdin.isTTY, process.stdout.isTTY]
+		delete process.env.CI
+		process.stdin.isTTY = process.stdout.isTTY = true
+		try {
+			assert.isTrue(ui.isInteractive({}))
+			assert.isFalse(ui.isInteractive({ json:true }))
+		} finally {
+			process.stdin.isTTY = stdin
+			process.stdout.isTTY = stdout
+			if (CI !== undefined)
+				process.env.CI = CI
+		}
+	})
+
 	it('Should carry a hint and an exit code on CLI errors', () => {
 		const err = new ui.CliError('No profile matches', { hint:'try status', code:3 })
 		assert.equal(err.exitCode, 3)

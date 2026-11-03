@@ -84,7 +84,7 @@ AWS_PROFILE=dev aws s3 ls
 AWS_PROFILE=dev terraform plan
 ```
 
-Prefixing also lets concurrent agents use different profiles. For agents: `switch-profile` never prompts without a TTY, `status --json` lists profiles, and exit code 2 means a login is needed. `switch-profile login <profile> --device` works non-interactively: the URL and code go to stderr, for a human to approve. The `switch-aws-profile` agent skill (`.agents/skills/switch-aws-profile`) wraps all of this.
+Prefixing also lets concurrent agents use different profiles. For agents: `switch-profile` never prompts without a TTY or with `--json`, `status --json` lists profiles, and exit code 2 means a login is needed. `switch-profile login <profile> --device` works non-interactively: the URL and code go to stderr, for a human to approve. The `switch-aws-profile` agent skill (`.agents/skills/switch-aws-profile`) wraps all of this.
 
 ## Switching and search
 

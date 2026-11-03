@@ -25,7 +25,7 @@ const intro = opts => {
 const begin = async (opts, { needsInput, hint } = {}) => {
 	const interactive = ui.isInteractive(opts)
 	if (needsInput && !interactive)
-		throw new ui.CliError('This command is interactive.', { code:3, hint:hint || 'Run it in a terminal.' })
+		throw new ui.CliError('This command is interactive.', { code:3, hint:hint || 'Run it in a terminal, without --json.' })
 	if (!opts.fromPicker)
 		await preflight({ interactive, quiet:opts.json })
 	intro(opts)
@@ -46,7 +46,7 @@ const use = async (name, opts) => {
 	const interactive = ui.isInteractive(opts)
 	await preflight({ interactive, quiet:opts.json })
 	const state = await loadState()
-	if (interactive && !opts.json)
+	if (interactive)
 		intro(opts)
 	return switchTo(findProfile(state, name), state, { ...opts, interactive })
 }
@@ -174,7 +174,7 @@ const add = async (args, opts) => {
 		throw new ui.CliError('Pass only one of --from-sso, --sso and --console.', { code:3 })
 	const interactive = await begin(opts, {
 		needsInput: !opts.fromSso && !opts.sso && !opts.console,
-		hint: 'Run it in a terminal, or pass --from-sso <session>, --sso <session> or --console. Access keys can only be added in a terminal.'
+		hint: 'Run it in a terminal without --json, or pass --from-sso <session>, --sso <session> or --console. Access keys can only be added in a terminal.'
 	})
 	const state = await loadState()
 	if (opts.fromSso)
@@ -290,7 +290,7 @@ const addSsoProfile = async (state, opts) => {
 const addConsoleProfile = async (state, opts) => {
 	checkNewProfile(state, opts, { '--name':opts.name, '--region':opts.region }, 'switch-profile add --console --name <name> --region <region>')
 	if (!opts.interactive && isRemoteSession(process.env, process.platform))
-		throw new ui.CliError('Without a browser on this machine, aws login needs a code pasted into a terminal.', { code:3, hint:'Run in a terminal: switch-profile add' })
+		throw new ui.CliError('Without a browser on this machine, aws login needs a code pasted into a terminal.', { code:3, hint:'Run in a terminal, without --json: switch-profile add' })
 	const previous = await writeConsoleProfile(opts.name, opts.region)
 	try {
 		await aws.awsLogin(opts.name, { toStderr:!opts.interactive })
@@ -403,7 +403,8 @@ const importFromSso = async (state, opts) => {
 	const region = opts.region || (interactive ? await chooseRegion('Default region for these profiles', sessionRegions[0] || session.sso_region) : session.sso_region)
 	const prefix = opts.prefix || (interactive ? await ask(p.text({ message:`Name prefix ${ui.dim('(profiles become <prefix>-<account>-<role>)')}`, initialValue:sessionName, validate: v => /^[a-z0-9_-]*$/.test(v || '') ? undefined : 'Lowercase letters, numbers, - and _ only.' })) : sessionName)
 
-	const preview = transforms.populateSsoProfiles(configStr, { ssoSession:sessionName, entries, region, prefix, prune:false, version:settings.CLI_VERSION })
+	const preview = transforms.populateSsoProfiles(configStr, { ssoSession:sessionName, entries, region, prefix, prune:false, defaultProfile:state.defaultName, version:settings.CLI_VERSION })
+	const removable = preview.stale.filter(name => !preview.kept.some(k => k.name == name))
 
 	const only = opts.only !== undefined ? opts.only.split(',').map(x => x.trim()).filter(Boolean) : null
 	if (only && !only.length)
@@ -416,12 +417,13 @@ const importFromSso = async (state, opts) => {
 	const summary = [
 		preview.added.length ? `${ui.ok(`+${preview.added.length}`)} new: ${preview.added.slice(0, 6).join(', ')}${preview.added.length > 6 ? ', …' : ''}` : null,
 		preview.existing.length ? ui.dim(`${preview.existing.length} already set up (kept as they are)`) : null,
-		preview.stale.length ? `${ui.warn(`−${preview.stale.length}`)} no longer available: ${preview.stale.join(', ')}` : null
+		preview.stale.length ? `${ui.warn(`−${preview.stale.length}`)} no longer available: ${preview.stale.join(', ')}` : null,
+		...preview.kept.map(k => ui.dim(`${k.name} stays, even with prune: ${k.reason}`))
 	].filter(Boolean).join('\n')
 
 	if (opts.dryRun) {
 		if (opts.json)
-			return void process.stdout.write(JSON.stringify({ dryRun:true, session:sessionName, region, prefix, added:selected.map(e => e.name), addedEntries:selected, existing:preview.existing, removed:opts.prune ? preview.stale : [], stale:preview.stale }) + '\n')
+			return void process.stdout.write(JSON.stringify({ dryRun:true, session:sessionName, region, prefix, added:selected.map(e => e.name), addedEntries:selected, existing:preview.existing, removed:opts.prune ? removable : [], stale:preview.stale, kept:preview.kept }) + '\n')
 		if (summary)
 			p.log.message(summary)
 		return p.outro(ui.dim('Dry run: nothing was written.'))
@@ -429,7 +431,7 @@ const importFromSso = async (state, opts) => {
 
 	if (!preview.added.length && !preview.stale.length) {
 		if (opts.json)
-			return process.stdout.write(JSON.stringify({ added:[], existing:preview.existing, removed:[], stale:[] }) + '\n')
+			return process.stdout.write(JSON.stringify({ added:[], existing:preview.existing, removed:[], stale:[], kept:[] }) + '\n')
 		return p.outro(`${ui.ok(ui.sym.ok)} Everything is already set up ${ui.dim(`(${preview.existing.length} profiles)`)}`)
 	}
 
@@ -447,24 +449,24 @@ const importFromSso = async (state, opts) => {
 				initialValues: all,
 				options: preview.addedEntries.map((e, i) => ({ value:all[i], label:e.name, hint:[e.accountName, e.accountId, e.roleName].filter(Boolean).join(' · ') }))
 			}))
-			if (!picked.length && !preview.stale.length)
+			if (!picked.length && !removable.length)
 				return p.outro(ui.dim('Nothing changed.'))
 			if (picked.length < all.length)
 				include = picked
 		}
-		if (preview.stale.length)
-			prune = await ask(p.confirm({ message:`Remove the ${preview.stale.length} profile${preview.stale.length == 1 ? '' : 's'} that no longer exist${preview.stale.length == 1 ? 's' : ''}?`, initialValue:false }))
+		if (removable.length)
+			prune = await ask(p.confirm({ message:`Remove the ${removable.length} profile${removable.length == 1 ? '' : 's'} that no longer exist${removable.length == 1 ? 's' : ''}?`, initialValue:false }))
 	}
 	if (include && !include.length && !prune)
 		return p.outro(ui.dim('Nothing changed.'))
 	if (prune)
 		await aws.backupAwsFiles()
-	const result = transforms.populateSsoProfiles(configStr, { ssoSession:sessionName, entries, region, prefix, prune, include, version:settings.CLI_VERSION })
+	const result = transforms.populateSsoProfiles(configStr, { ssoSession:sessionName, entries, region, prefix, prune, include, defaultProfile:state.defaultName, version:settings.CLI_VERSION })
 	await aws.writeAwsFile(aws.AWS_CONFIG_FILE, result.config)
 	await settings.update({})
 
 	if (opts.json) {
-		process.stdout.write(JSON.stringify({ added:result.added, existing:result.existing, removed:result.removed, stale:prune ? [] : result.stale }) + '\n')
+		process.stdout.write(JSON.stringify({ added:result.added, existing:result.existing, removed:result.removed, stale:prune ? result.kept.map(k => k.name) : result.stale, kept:result.kept }) + '\n')
 		return
 	}
 	p.outro(`${ui.ok(ui.sym.ok)} Added ${result.added.length} profile${result.added.length == 1 ? '' : 's'}${result.removed.length ? `, removed ${result.removed.length}` : ''} ${ui.unicode ? '🎉' : ''}\n   ${ui.dim(`Try: ${shell.FUNCTION_NAME} ${prefix || sessionName}`)}`)
@@ -491,6 +493,9 @@ const remove = async (names, opts) => {
 	names.forEach(n => findProfile(state, n))
 	if (names.includes(state.defaultName))
 		throw new ui.CliError(`${state.defaultName} is the current default profile.`, { code:3, hint:'Switch to another profile first.' })
+	const dependent = state.profiles.find(x => names.includes(x.source_profile) && !names.includes(x.name))
+	if (dependent)
+		throw new ui.CliError(`${dependent.name} uses ${dependent.source_profile} as its source_profile, and would stop working.`, { code:3, hint:`Remove ${dependent.name} too, or change its source_profile first.` })
 	if (!opts.yes) {
 		if (!interactive)
 			throw new ui.CliError('Removing profiles needs confirmation.', { code:3, hint:'Add --yes.' })
@@ -623,7 +628,7 @@ const portalsCommand = async (name, opts) => {
 		return p.outro(ui.dim(`Log in again: switch-profile login <a ${name} profile>`))
 	}
 
-	if (!interactive || opts.json) {
+	if (!interactive) {
 		const list = await portals.listPortals(state, { detect:!!opts.check })
 		const selected = name ? list.filter(x => x.name == name) : list
 		if (name && !selected.length)
@@ -742,7 +747,7 @@ const applySettings = async opts => {
  */
 const settingsCommand = async (args, opts) => {
 	const interactive = await begin(opts)
-	if (!interactive || opts.json || opts.loginMode || opts.shortcut || opts.upgradeLegacySso)
+	if (!interactive || opts.loginMode || opts.shortcut || opts.upgradeLegacySso)
 		return applySettings(opts)
 	for (;;) {
 		const { current, mode, s, legacy, here } = await readSettingsState()

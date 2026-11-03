@@ -253,14 +253,15 @@ const ssoEntryKey = (accountId, roleName) => `${accountId}/${roleName}`
  * @param  {Array}   options.entries		[{ accountId, accountName, roleName }]
  * @param  {String}  options.region			Default region of the generated profiles
  * @param  {String}  options.prefix			Name prefix (defaults to the session name)
- * @param  {Boolean} options.prune			Remove stale generated profiles
+ * @param  {Boolean} options.prune			Remove stale generated profiles, except those still in use (returned in 'kept')
+ * @param  {String}  options.defaultProfile	Name of the current default profile, which is never pruned
  * @param  {Array}   options.include		Optional ssoEntryKey() list: only these new account/role pairs are added.
  *											The other entries still count as available (never stale).
  * @param  {String}  options.version
  * @return {Object}  { config, added:[names], addedEntries:[{ name, accountId, accountName, roleName }],
  *                     existing:[names], stale:[names], removed:[names] }
  */
-const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, prune, include, version }) => {
+const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, prune, include, defaultProfile, version }) => {
 	let config = configStr
 	const profiles = listProfiles(config)
 	const session = ini.getSection(config, `sso-session ${ssoSession}`) || {}
@@ -303,14 +304,18 @@ const populateSsoProfiles = (configStr, { ssoSession, entries, region, prefix, p
 	}
 
 	const stale = profiles.filter(p => p.generated == ssoSession && !wanted.has(key(p.sso_account_id, p.sso_role_name))).map(p => p.name)
+	const kept = stale.flatMap(name => {
+		const role = profiles.find(p => p.source_profile == name)
+		return name == defaultProfile ? [{ name, reason:'it is the current default' }] : role ? [{ name, reason:`${role.name} uses it as its source_profile` }] : []
+	})
 	const removed = []
 	if (prune) {
-		for (const name of stale) {
+		for (const name of stale.filter(name => !kept.some(k => k.name == name))) {
 			config = ini.removeSection(config, configSectionName(config, name))
 			removed.push(name)
 		}
 	}
-	return { config, added, addedEntries, existing, stale, removed }
+	return { config, added, addedEntries, existing, stale, kept, removed }
 }
 
 const escapeRegex = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

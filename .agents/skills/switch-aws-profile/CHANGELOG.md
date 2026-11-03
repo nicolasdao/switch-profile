@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.1]
+
+### Changed
+- Describe the CLI 2.6.0 protections: `remove` refuses, and `add --prune` keeps, the default and any role's `source_profile`. The `kept` field of an import result says what stayed
+
 ## [0.1.0]
 
 ### Added

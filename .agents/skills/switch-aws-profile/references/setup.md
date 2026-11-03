@@ -76,7 +76,7 @@ sp-cli add --from-sso acme --prefix acme --region ap-southeast-2 --no-input --js
 sp-cli add --from-sso acme --prefix acme --region ap-southeast-2 --only acme-prod-admin,acme-dev-admin --no-input --json
 ```
 
-Use the same `--prefix` and `--region` as the preview, since `--only` takes the names it showed. Unticked pairs are not remembered: the next import offers them again. Add `--prune` only if the user agreed to remove the `stale` profiles (backups are taken first), and none of them is the current default. Hand-written profiles are never stale.
+Use the same `--prefix` and `--region` as the preview, since `--only` takes the names it showed. Unticked pairs are not remembered: the next import offers them again. Add `--prune` only if the user agreed to remove the `stale` profiles (backups are taken first). The current default and any role's `source_profile` stay, listed in `kept`. Hand-written profiles are never stale.
 
 **8. Verify and tidy.**
 

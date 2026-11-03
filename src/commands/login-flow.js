@@ -37,7 +37,7 @@ const ssoLogin = async (target, { label, loginKey, interactive, loginMode }) => 
 	const remote = isRemoteSession(process.env, process.platform)
 
 	if (!interactive) {
-		await plainLogin(args, label)
+		await plainLogin(args, label, device)
 		return rememberLogin(loginKey)
 	}
 
@@ -167,8 +167,8 @@ const ssoLogin = async (target, { label, loginKey, interactive, loginMode }) => 
 /**
  * Non-interactive login: no keypresses or spinner, AWS CLI output passed through on stderr.
  */
-const plainLogin = async (args, label) => {
-	console.error(`Logging in to ${label}. Approve the request using the URL and code below.`)
+const plainLogin = async (args, label, device) => {
+	console.error(`Logging in to ${label}. Approve the request using the URL and code below.${device ? ' Only approve if the page shows exactly this code.' : ''}`)
 	await new Promise((resolve, reject) => {
 		const started = Date.now()
 		const child = spawn('aws', args, { stdio:['ignore', process.stderr, process.stderr], ...(IS_WINDOWS ? { shell:true } : {}) })

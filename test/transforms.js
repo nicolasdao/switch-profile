@@ -184,6 +184,18 @@ sso_region = eu-west-1
 		assert.notInclude(pruned.config, 'acme-b-r')
 	})
 
+	it('Should not prune a stale profile that is the default or the source of a role', () => {
+		const entries = [{ accountId:'1', accountName:'A', roleName:'R' }, { accountId:'2', accountName:'B', roleName:'R' }, { accountId:'3', accountName:'C', roleName:'R' }]
+		const first = t.populateSsoProfiles('[sso-session acme]\nsso_start_url = https://acme.awsapps.com/start\n', { ssoSession:'acme', entries, version:'2' })
+		const config = `${first.config}\n[profile deploy]\nrole_arn = arn:aws:iam::1:role/R\nsource_profile = acme-b-r\n`
+		const pruned = t.populateSsoProfiles(config, { ssoSession:'acme', entries:[], prune:true, defaultProfile:'acme-a-r', version:'2' })
+		assert.deepEqual(pruned.stale, ['acme-a-r', 'acme-b-r', 'acme-c-r'])
+		assert.deepEqual(pruned.removed, ['acme-c-r'])
+		assert.deepEqual(pruned.kept, [{ name:'acme-a-r', reason:'it is the current default' }, { name:'acme-b-r', reason:'deploy uses it as its source_profile' }])
+		assert.include(pruned.config, '[profile acme-a-r]')
+		assert.include(pruned.config, '[profile acme-b-r]')
+	})
+
 	it('Should add only the included new profiles, without marking the others stale', () => {
 		const config = '[sso-session acme]\nsso_start_url = https://acme.awsapps.com/start\n'
 		const entries = [{ accountId:'1', accountName:'A', roleName:'R' }, { accountId:'2', accountName:'B', roleName:'R' }, { accountId:'3', accountName:'C', roleName:'R' }]

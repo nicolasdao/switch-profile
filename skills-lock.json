@@ -1,6 +1,6 @@
 {
 	"lockVersion": 2,
-	"generatedAt": "2026-11-03T06:01:08.957Z",
+	"generatedAt": "2026-11-03T09:17:17.710Z",
 	"skills": {
 		"nicolasdao/_kit-dev-essentials": {
 			"version": "1.0.0",
@@ -51,12 +51,12 @@
 			"type": "skill"
 		},
 		"nicolasdao/switch-aws-profile": {
-			"version": "0.1.0",
-			"ref": "refs/tags/v0.1.0",
-			"commit": "542cb9f8c8be71602ad0dc00c5e72e746dd7fb6dacc0b7a86bb8bedf333adb1c",
-			"integrity": "sha256-e3e4e938700e3aeb1ca081b8ece2e8b443cfbd4f61a1e0cfa249873654bfe01d",
-			"base_commit": "542cb9f8c8be71602ad0dc00c5e72e746dd7fb6dacc0b7a86bb8bedf333adb1c",
-			"base_integrity": "sha256-e3e4e938700e3aeb1ca081b8ece2e8b443cfbd4f61a1e0cfa249873654bfe01d",
+			"version": "0.1.1",
+			"ref": "refs/tags/v0.1.1",
+			"commit": "671cd5ede89fd680525404cf6be1bdc3b98aa75c355a9f9bdd89700a19353b94",
+			"integrity": "sha256-f2855511e2274af8e09d3c8c3ae7fc8f8796627c5d2a63e13a59d7d39dd74c09",
+			"base_commit": "671cd5ede89fd680525404cf6be1bdc3b98aa75c355a9f9bdd89700a19353b94",
+			"base_integrity": "sha256-f2855511e2274af8e09d3c8c3ae7fc8f8796627c5d2a63e13a59d7d39dd74c09",
 			"requested_by": [
 				"__root__"
 			],

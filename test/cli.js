@@ -70,6 +70,7 @@ region = us-west-2
 		const login = run(['login', 'acme-dev', '--device', '--json'])
 		assert.equal(login.code, 0, login.err)
 		assert.include(login.err, 'WXYZ-ABCD', 'the device code goes to stderr')
+		assert.include(login.err, 'Only approve if the page shows exactly this code.')
 		assert.equal(JSON.parse(login.out).account, '222222222222')
 		const r = run(['acme', 'dev', '--json'])
 		assert.equal(r.code, 0, r.err)
@@ -115,6 +116,12 @@ region = us-west-2
 		assert.equal(run(['remove', 'acme-security-readonly', '--yes']).code, 0)
 		assert.notInclude(config(), 'acme-security-readonly')
 		assert.equal(run(['remove', 'acme-prod', '--yes']).code, 3, 'the current default cannot be removed')
+		fs.appendFileSync(join(home, '.aws', 'config'), '\n[profile dep-source]\nregion = us-east-1\n\n[profile dep-role]\nrole_arn = arn:aws:iam::777777777777:role/R\nsource_profile = dep-source\n')
+		const used = run(['remove', 'dep-source', '--yes', '--json'])
+		assert.equal(used.code, 3, 'the source of a role cannot be removed alone')
+		assert.include(JSON.parse(used.err).error, 'dep-role uses dep-source')
+		assert.include(config(), '[profile dep-source]')
+		assert.equal(run(['remove', 'dep-source', 'dep-role', '--yes']).code, 0, 'removing both is fine')
 	})
 
 	it('Should list and edit SSO portals without prompting', () => {
@@ -369,6 +376,27 @@ region = us-west-2
 			assert.include(config(), '[sso-session initech]')
 			assert.equal(run(['remove', 'old-sso', '--yes']).code, 0)
 		})
+	})
+
+	it('Should keep a stale profile that is the default when pruning', () => {
+		assert.equal(run(['login', '--sso-session', 'acme', '--device', '--json']).code, 0)
+		const stale = name => `\n[profile ${name}]\nsso_session = acme\nsso_account_id = 888888888888\nsso_role_name = ${name}\nswitch_profile_generated = acme\n`
+		fs.appendFileSync(join(home, '.aws', 'config'), stale('stale-used') + stale('stale-free'))
+		assert.equal(run(['use', 'stale-used', '--json']).code, 0)
+		const kept = [{ name:'stale-used', reason:'it is the current default' }]
+		const dry = JSON.parse(run(['add', '--from-sso', 'acme', '--prune', '--dry-run', '--json']).out)
+		assert.deepEqual(dry.removed, ['stale-free'])
+		assert.deepEqual(dry.kept, kept)
+		const r = run(['add', '--from-sso', 'acme', '--prune', '--json'])
+		assert.equal(r.code, 0, r.err)
+		const out = JSON.parse(r.out)
+		assert.deepEqual(out.removed, ['stale-free'])
+		assert.deepEqual(out.stale, ['stale-used'])
+		assert.deepEqual(out.kept, kept)
+		assert.include(config(), '[profile stale-used]')
+		assert.notInclude(config(), '[profile stale-free]')
+		assert.equal(run(['use', 'keys', '--json']).code, 0)
+		assert.equal(run(['remove', 'stale-used', '--yes']).code, 0)
 	})
 
 	it('Should log every run, AWS CLI call and error to ~/.switch-profile/switch-profile.log', () => {

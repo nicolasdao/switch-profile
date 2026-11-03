@@ -112,7 +112,7 @@ Everything else, including everything on the interactive home screen, has a flag
 - **ALWAYS** pass `--no-input --json`, and use `npx --yes switch-profile@latest`.
 - **ALWAYS** confirm with AskUserQuestion first, naming exactly what changes:
   - `logout`: it ends every SSO session on this machine, for every project
-  - `remove`, and `add --prune`. First check that none of them is the default or another profile's `source_profile`
+  - `remove`, and `add --prune`. The CLI refuses or keeps the default and any role's `source_profile`, and says so
   - `use` when the target has `"prod": true`, or when the user did not ask to change the default
   - `rename`: anything else using the old name breaks until updated
   - `portals <name> --region` or `--start-url`: it changes every profile of that portal
